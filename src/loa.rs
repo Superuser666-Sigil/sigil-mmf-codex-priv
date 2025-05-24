@@ -1,13 +1,11 @@
-// Canon-Compliant loa.rs
-// Purpose: Define Levels of Access (LOA) and trust enforcement roles in MMF + Sigil
-
-use serde::{Deserialize, Serialize};
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum LOA {
     Observer,
     Operator,
+    Mentor,
     Root,
 }
 
@@ -16,6 +14,7 @@ impl LOA {
         match self {
             LOA::Observer => "Observer",
             LOA::Operator => "Operator",
+            LOA::Mentor => "Mentor",
             LOA::Root => "Root",
         }
     }
@@ -52,8 +51,40 @@ pub fn can_read_canon(loa: &LOA) -> bool {
 
 pub fn can_write_canon(loa: &LOA, allow_operator_write: bool) -> bool {
     match loa {
+        LOA::Mentor => allow_operator_write,
         LOA::Root => true,
         LOA::Operator => allow_operator_write,
         _ => false,
+    }
+}
+
+// Canon Access Traits
+pub trait CanonReadAccess {
+    fn can_read(&self) -> bool;
+}
+
+pub trait CanonWriteAccess {
+    fn can_write(&self) -> bool;
+}
+
+pub trait CanonAdminAccess: CanonReadAccess + CanonWriteAccess {
+    fn can_elevate(&self) -> bool;
+}
+
+impl CanonReadAccess for LOA {
+    fn can_read(&self) -> bool {
+        matches!(self, LOA::Mentor | LOA::Root)
+    }
+}
+
+impl CanonWriteAccess for LOA {
+    fn can_write(&self) -> bool {
+        matches!(self, LOA::Root | LOA::Operator) // <— bonus: allow Operator write access
+    }
+}
+
+impl CanonAdminAccess for LOA {
+    fn can_elevate(&self) -> bool {
+        matches!(self, LOA::Root)
     }
 }

@@ -1,0 +1,42 @@
+name: Canon Trust CI (Alpine)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  alpine-ci:
+    runs-on: ubuntu-latest  # GitHub-hosted runners do not support Alpine natively
+
+    container:
+      image: rust:alpine3.19
+
+    steps:
+      - name: Install build deps
+        run: |
+          apk add --no-cache \
+            build-base \
+            openssl-dev \
+            musl-dev \
+            pkgconfig \
+            libgcc \
+            bash \
+            git
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Test in musl context
+        run: |
+          rustup target add x86_64-unknown-linux-musl
+          cargo build --target x86_64-unknown-linux-musl
+          cargo test --target x86_64-unknown-linux-musl
+
+      - name: Format check
+        run: cargo fmt -- --check
+
+      - name: Canon hash (musl build)
+        run: |
+          find . -name '*.rs' | sort | xargs sha256sum > trust_hash_alpine.log
+          cat trust_hash_alpine.log

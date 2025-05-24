@@ -1,0 +1,42 @@
+[package]
+name = "mmf-sigil-runtime"
+version = "0.1.5"
+authors = [ "Superuser666 <david.tofflemire@student.uagc.edu>",]
+edition = "2024"
+description = "SigilDERG - Distributed Epistemic Runtime Governance"
+license = "MIT OR Apache-2.0"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[workspace]
+resolver = "2"
+
+
+[dependencies]
+serde_json = "1.0"
+log = "0.4"
+base64 = "0.21"
+ed25519-dalek = "1.0"
+axum = "0.7"
+toml = "0.8"
+sled = "0.34"
+clap = "4.4"
+aes-gcm = "0.10"
+sha2 = "0.10"
+zip = "0.6"
+
+[dependencies.serde]
+version = "1.0"
+features = [ "derive",]
+
+[dependencies.chrono]
+version = "0.4"
+features = [ "serde",]
+
+[dependencies.uuid]
+version = "1"
+features = [ "v4",]

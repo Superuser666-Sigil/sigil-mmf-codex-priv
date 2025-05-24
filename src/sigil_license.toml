@@ -1,0 +1,38 @@
+# sigil_license.toml
+# Sigil Protocol v1.0 — Canonical License File
+# NOTE: This example assumes the license is tied to a specific Canon, runtime instance, and LOA/Level of Authorization
+
+[license]
+id = "sigil-license-9876e4bc"
+issued_at = "2025-05-14T20:00:00Z"
+expires_at = "2025-08-14T20:00:00Z"
+loa = "Root"
+scope = ["canon:rust:nomicon", "module:mentor", "runtime:MMF"]
+issuer = "sigil_trust_v1"
+version = "1.0"
+
+[license.owner]
+name = "Dave"
+mnemonic = "Asbjorn777"
+email = "root@sigil.system"
+hash_id = "6f1f09ef02cce2aa7a4cba8f8ed4b73b"
+
+[license.bindings]
+canon_fingerprint = "sha256:48fa3b6d3cc8914f3e68ef4c62b23a4c759ea6b30a6fd8c5e7d61dbbfe26be91"
+runtime_id = "sigil-runtime-4c2d0a"
+
+[license.trust]
+trust_model = "sigil_trust_v1"
+signature = "ed25519:89a13c52a2a62c7dd24cb1d971c3a487a5d69f8d967e08739e5ae3f64c1b3cbe"
+sealed = true
+
+[license.permissions]
+can_mutate_canon = true
+can_override_audit = true
+can_register_module = true
+can_elevate_identity = true
+
+[license.audit]
+last_verified = "2025-05-14T20:00:00Z"
+verifier = "sigil-trust-engine"
+canonicalized = true

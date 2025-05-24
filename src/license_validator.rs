@@ -7,8 +7,9 @@ use std::fs;
 use std::path::Path;
 use crate::audit::{AuditEvent, LogLevel};
 use crate::loa::LOA;
+use toml;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SigilLicense {
     pub id: String,
@@ -25,7 +26,7 @@ pub struct SigilLicense {
     pub audit: LicenseAudit,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LicenseOwner {
     pub name: String,
@@ -34,14 +35,14 @@ pub struct LicenseOwner {
     pub hash_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LicenseBindings {
     pub canon_fingerprint: String,
     pub runtime_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LicenseTrust {
     pub trust_model: String,
@@ -49,7 +50,7 @@ pub struct LicenseTrust {
     pub sealed: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LicensePermissions {
     pub can_mutate_canon: bool,
@@ -58,7 +59,7 @@ pub struct LicensePermissions {
     pub can_elevate_identity: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LicenseAudit {
     pub last_verified: DateTime<Utc>,
@@ -66,7 +67,7 @@ pub struct LicenseAudit {
     pub canonicalized: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LicenseValidationResult {
     pub license: SigilLicense,
     pub valid: bool,
@@ -79,11 +80,12 @@ pub struct LicenseValidationResult {
 pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint: &str) -> Result<LicenseValidationResult, String> {
     let content = fs::read_to_string(Path::new(path))
         .map_err(|e| format!("Failed to read license file: {}", e))?;
+
     let parsed: toml::Value = toml::from_str(&content)
         .map_err(|e| format!("Invalid TOML format: {}", e))?;
 
     let license: SigilLicense = parsed.get("license")
-        .ok_or("Missing [license] block")
+        .ok_or("Missing [license] block".to_string())
         .and_then(|val| toml::from_str(&val.to_string()).map_err(|e| format!("Deserialize error: {}", e)))?;
 
     let now = Utc::now();
@@ -111,7 +113,8 @@ pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint
         "license_validator.rs"
     )
     .with_severity(if score >= 0.9 { LogLevel::Info } else { LogLevel::Warn })
-    .with_context(format!("License validation result: {}", msg));
+    .with_context(format!("License validation result: {}", msg).to_string());
+
 
     Ok(LicenseValidationResult {
         license,
@@ -120,4 +123,11 @@ pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint
         irl_score: score,
         audit,
     })
+}
+
+// Temporary stub: returns default LOA level
+pub fn load_current_loa() -> LOA {
+    // In a full implementation, you'd load the license and extract LOA
+    // Here, we return Observer by default
+    LOA::Observer
 }

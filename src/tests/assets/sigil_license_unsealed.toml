@@ -1,0 +1,34 @@
+[license]
+id = "root.local.dev"
+issuedAt = "2024-01-01T00:00:00Z"
+expiresAt = "2028-01-01T00:00:00Z"
+loa = "ROOT"
+scope = ["*"]
+issuer = "davet"
+version = "1.0"
+
+[license.owner]
+name = "Dave"
+mnemonic = "ghost-beta"
+email = "root@mmf.foundation"
+hashId = "dev1234"
+
+[license.bindings]
+canonFingerprint = "test-fp"
+runtimeId = "test-runtime"
+
+[license.trust]
+trustModel = "quorum"
+signature = "FAKESIG"
+sealed = false
+
+[license.permissions]
+canMutateCanon = true
+canOverrideAudit = false
+canRegisterModule = true
+canElevateIdentity = true
+
+[license.audit]
+lastVerified = "2025-05-15T00:00:00Z"
+verifier = "root"
+canonicalized = true

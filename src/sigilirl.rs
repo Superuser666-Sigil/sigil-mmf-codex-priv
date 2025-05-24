@@ -2,15 +2,15 @@
 // Purpose: CLI tool for MMF+Sigil trust model training, listing, and enforcement via IRL
 
 use clap::{App, Arg, SubCommand};
-use mmf_sigil::irl_train_tool::train_model;
-use mmf_sigil::irl_runtime::TrustGuard;
-use mmf_sigil::canon_store_sled::CanonStoreSled;
-use mmf_sigil::config_loader::load_config;
-use mmf_sigil::license_validator::validate_license;
-use mmf_sigil::session_context::SessionContext;
-use mmf_sigil::audit::{AuditEvent, LogLevel};
+use crate::irl_train_tool::train_model;
+use crate::irl_runtime::TrustGuard;
+use crate::canon_store_sled::CanonStoreSled;
+use crate::config_loader::load_config;
+use crate::license_validator::validate_license;
+use crate::session_context::SessionContext;
+use crate::audit::{AuditEvent, LogLevel};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = App::new("sigilirl")
         .version("1.0")
         .author("MMF + Sigil Runtime Team")
