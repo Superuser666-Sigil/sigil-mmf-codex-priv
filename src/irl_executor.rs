@@ -1,19 +1,10 @@
-use crate::trusted_knowledge::TrustedKnowledgeEntry;
-use crate::irl_data_pipeline::score_entry;
-use crate::irl_telemetry::log_irl_result;
-use crate::audit::log_audit_event;
-use chrono::Utc;
+use crate::audit_chain::ReasoningChain;
+use crate::irl_feature_store::vectorize_chain;
+use crate::audit_store::write_chain;
 
-pub fn evaluate_with_irl(entry: &TrustedKnowledgeEntry) -> Result<f32, String> {
-    match score_entry(entry) {
-        Ok(score) => {
-            log_irl_result(&entry.id, score);
-            log_audit_event("IRLScoreGenerated", Some(&entry.id), &format!("Score: {}", score), "Info", Utc::now());
-            Ok(score)
-        },
-        Err(e) => {
-            log_audit_event("IRLScoreFailure", Some(&entry.id), &e, "Warning", Utc::now());
-            Err(e)
-        }
-    }
+pub fn evaluate_chain(chain: &ReasoningChain) -> Result<f32, String> {
+    let vec = vectorize_chain(chain)?;
+    let score = vec.iter().sum::<f32>() / vec.len().max(1) as f32;
+    write_chain(chain)?;  // optional: confirm chain is audited
+    Ok(score)
 }

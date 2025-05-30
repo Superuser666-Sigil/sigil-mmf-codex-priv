@@ -1,67 +1,45 @@
-// Canon-Compliant log_sink.rs
-// Purpose: Handle trusted runtime logging of system events, actions, and trust decisions
 
-use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
-use crate::loa::LOA;
+use chrono::Utc;
+use std::fs::{OpenOptions};
+use std::io::Write;
+use std::path::Path;
 
-/// LogLevel classifies the severity of log output.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum LogLevel {
-    Debug,
-    Info,
-    Warn,
-    Error,
-    Fatal,
-}
-
-/// LogEvent is a structured record of runtime activity.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 pub struct LogEvent {
-    pub trace_id: String,
-    pub component: String,
-    pub event_type: String,
-    pub context: String,
-    pub level: LogLevel,
-    pub timestamp: DateTime<Utc>,
+    pub module: String,
+    pub message: String,
+    pub session_id: Option<String>,
+    pub tag: Option<String>,
 }
 
 impl LogEvent {
-    /// Emit this log event to stdout or log sink, gated by LOA-based access.
-    pub fn emit<T: LogSinkAccess>(&self, loa: &T) -> Result<(), &'static str> {
-        if !loa.can_log(self.level) {
-            return Err("LOA not permitted to emit log event at this level");
-        }
-
-        println!("[LOG] {} | {} | {} | {}", self.level_string(), self.component, self.event_type, self.context);
-        Ok(())
-    }
-
-    fn level_string(&self) -> &'static str {
-        match self.level {
-            LogLevel::Debug => "DEBUG",
-            LogLevel::Info => "INFO",
-            LogLevel::Warn => "WARN",
-            LogLevel::Error => "ERROR",
-            LogLevel::Fatal => "FATAL",
+    pub fn new(module: &str, message: &str, session_id: Option<&str>, tag: Option<&str>) -> Self {
+        LogEvent {
+            module: module.into(),
+            message: message.into(),
+            session_id: session_id.map(|s| s.into()),
+            tag: tag.map(|t| t.into()),
         }
     }
-}
 
-/// Trait that defines LOA-based control over what can be logged.
-pub trait LogSinkAccess {
-    fn can_log(&self, level: LogLevel) -> bool;
-}
+    pub fn write_to(&self, path: &str) -> Result<(), &'static str> {
+        let log_path = Path::new(path);
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_path)
+            .map_err(|_| "Failed to open log sink")?;
 
-impl LogSinkAccess for LOA {
-    fn can_log(&self, level: LogLevel) -> bool {
-        match self {
-            LOA::Root => true,
-            LOA::Mentor => true,
-            LOA::Operator => level <= LogLevel::Warn,
-            LOA::Observer => level <= LogLevel::Info,
-        }
+        let time = Utc::now().to_rfc3339();
+        let formatted = format!(
+            "[{}] [{}] [{}] {} {}",
+            time,
+            self.module,
+            self.tag.clone().unwrap_or_else(|| "-".into()),
+            self.session_id.clone().unwrap_or_else(|| "-".into()),
+            self.message
+        );
+
+        writeln!(file, "{}", formatted).map_err(|_| "Failed to write log event")
     }
 }

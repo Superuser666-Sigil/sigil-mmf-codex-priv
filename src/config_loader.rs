@@ -1,50 +1,85 @@
-// Canon-Compliant Config Loader for MMF + Sigil
-// Purpose: Load config from file or environment, emit audit trace, and support IRL-compatible results
 
-use std::fs;
-use std::path::Path;
-use chrono::Utc;
-use crate::config::MMFConfig;
-use crate::audit::{AuditEvent, LogLevel};
-
-#[derive(Debug)]
-pub struct ConfigLoadResult {
-    pub config: MMFConfig,
-    pub audit: AuditEvent,
-    pub irl_score: f32,
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct IRLConfig {
+    pub enforcement_mode: String,
+    pub active_model: Option<String>,
+    pub threshold: f64,
+    pub telemetry_enabled: bool,
+    pub explanation_enabled: bool,
 }
 
-/// Attempts to load configuration from a JSON file, then environment as fallback
-pub fn load_config(path: Option<&str>) -> Result<ConfigLoadResult, String> {
-    let (config, source_note) = if let Some(path_str) = path {
-        let content = fs::read_to_string(Path::new(path_str))
-            .map_err(|e| format!("Failed to read config file '{}': {}", path_str, e))?;
-        let cfg: MMFConfig = serde_json::from_str(&content)
-            .map_err(|e| format!("Invalid config JSON in '{}': {}", path_str, e))?;
-        (cfg, format!("Loaded from file: {}", path_str))
-    } else {
-        let cfg = MMFConfig::from_env()?;
-        (cfg, "Loaded from environment defaults".into())
-    };
+impl Default for IRLConfig {
+    fn default() -> Self {
+        Self {
+            enforcement_mode: "shadow".to_string(),
+            active_model: None,
+            threshold: 0.0,
+            telemetry_enabled: true,
+            explanation_enabled: true,
+        }
+    }
+}
 
-    let audit = AuditEvent::new(
-        "system",
-        "load_config",
-        "config-init",
-        "config_loader.rs"
-    )
-    .with_severity(LogLevel::Info)
-    .with_context(source_note);
 
-    let irl_score = if config.trust.allow_operator_canon_write {
-        0.9 // Slightly less than perfect due to elevated risk surface
-    } else {
-        1.0
-    };
 
-    Ok(ConfigLoadResult {
-        config,
-        audit,
-        irl_score,
-    })
+use figment::{
+    providers::{Env, Format, Serialized, Toml},
+    Figment,
+};
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MMFConfig {
+    pub license_secret: String,
+    pub db_backend: String,
+    #[serde(default)]
+    pub irl:
+  enforcement_mode: shadow
+  threshold: 0.0
+  telemetry_enabled: true
+  explanation_enabled: true
+
+trust: TrustConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TrustConfig {
+    #[serde(default = "default_loa")]
+    pub default_loa: String,
+    #[serde(default)]
+    pub allow_operator_canon_write: bool,
+    #[serde(default)]
+    pub allow_admin_export: bool,
+}
+
+fn default_loa() -> String {
+    "Observer".to_string()
+}
+
+impl Default for TrustConfig {
+    fn default() -> Self {
+        TrustConfig {
+            default_loa: default_loa(),
+            allow_operator_canon_write: false,
+            allow_admin_export: false,
+        }
+    }
+}
+
+pub fn load_config() -> MMFConfig {
+    Figment::from(Serialized::defaults(MMFConfig {
+        license_secret: "changeme".into(),
+        db_backend: "sled".into(),
+        irl:
+  enforcement_mode: shadow
+  threshold: 0.0
+  telemetry_enabled: true
+  explanation_enabled: true
+
+trust: TrustConfig::default(),
+    }))
+    .merge(Toml::file("mmf.toml"))
+    .merge(Env::prefixed("MMF_"))
+    .extract()
+    .expect("Failed to load MMF config")
 }

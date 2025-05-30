@@ -125,9 +125,8 @@ pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint
     })
 }
 
-// Temporary stub: returns default LOA level
-pub fn load_current_loa() -> LOA {
-    // In a full implementation, you'd load the license and extract LOA
-    // Here, we return Observer by default
-    LOA::Observer
-}
+
+
+
+
+

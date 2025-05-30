@@ -1,26 +1,13 @@
-// Canon-Compliant irl_modes.rs
-// Purpose: Define and apply runtime trust enforcement modes for MMF + Sigil
+use crate::audit_chain::{ReasoningChain, Verdict};
+use crate::audit_store::write_chain;
+use crate::loa::LoaLevel;
 
-use serde::{Serialize, Deserialize};
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum IRLMode {
-    Strict,
-    Lenient,
-    AuditOnly,
-}
-
-impl IRLMode {
-    pub fn apply(&self, base_score: f32) -> f32 {
-        match self {
-            IRLMode::Strict => base_score, // no changes
-            IRLMode::Lenient => (base_score + 1.0).min(1.0), // boost trust score slightly
-            IRLMode::AuditOnly => 1.0, // always assume success
-        }
-    }
-
-    pub fn should_enforce(&self) -> bool {
-        !matches!(self, IRLMode::AuditOnly)
-    }
+pub fn get_mode(chain: &mut ReasoningChain) -> &'static str {
+    chain.add_context("Checked runtime IRL mode");
+    chain.add_reasoning("Trust enforcement currently operates in passive mode only.");
+    chain.add_suggestion("Return mode as 'passive'");
+    chain.set_verdict(Verdict::Allow);
+    chain.set_irl_score(0.0, true);
+    let _ = write_chain(chain);
+    "passive"
 }
