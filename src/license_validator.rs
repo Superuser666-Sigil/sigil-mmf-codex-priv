@@ -130,3 +130,9 @@ pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint
 
 
 
+
+use crate::loa::LOA;
+
+pub fn load_current_loa() -> LOA {
+    LOA::Root
+}

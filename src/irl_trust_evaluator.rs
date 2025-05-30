@@ -1,0 +1,1 @@
+pub fn evaluate_trust(_: &str) -> bool { true }

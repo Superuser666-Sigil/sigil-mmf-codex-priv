@@ -33,13 +33,8 @@ pub struct MMFConfig {
     pub license_secret: String,
     pub db_backend: String,
     #[serde(default)]
-    pub irl:
-  enforcement_mode: shadow
-  threshold: 0.0
-  telemetry_enabled: true
-  explanation_enabled: true
-
-trust: TrustConfig,
+    pub irl: IRLConfig,
+    pub trust: TrustConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -70,13 +65,8 @@ pub fn load_config() -> MMFConfig {
     Figment::from(Serialized::defaults(MMFConfig {
         license_secret: "changeme".into(),
         db_backend: "sled".into(),
-        irl:
-  enforcement_mode: shadow
-  threshold: 0.0
-  telemetry_enabled: true
-  explanation_enabled: true
-
-trust: TrustConfig::default(),
+        irl: IRLConfig::default(),
+        trust: TrustConfig::default(),
     }))
     .merge(Toml::file("mmf.toml"))
     .merge(Env::prefixed("MMF_"))

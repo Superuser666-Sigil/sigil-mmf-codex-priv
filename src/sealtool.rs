@@ -28,3 +28,9 @@ pub fn seal_file(path: &str, out_path: &str) -> Result<(), &'static str> {
     fs::write(out_path, out_json).map_err(|_| "Write failed")?;
     Ok(())
 }
+
+use crate::canon_loader::CanonNode;
+
+pub fn seal_canon_entry(node: &CanonNode) -> String {
+    format!("sealed:{}", node.id)
+}

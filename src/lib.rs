@@ -25,7 +25,7 @@ pub mod sealtool;
 // Extensions & plugins
 pub mod extensions;
 
-// IRL data pipeline and executors
+// IRL (In Real Life) data pipeline and executors
 pub mod irl_data_pipeline;
 pub mod irl_executor;
 pub mod irl_explainer;
