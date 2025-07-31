@@ -79,14 +79,14 @@ pub struct LicenseValidationResult {
 /// Validates a sigil_license.toml file against Canon rules and trust policy
 pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint: &str) -> Result<LicenseValidationResult, String> {
     let content = fs::read_to_string(Path::new(path))
-        .map_err(|e| format!("Failed to read license file: {}", e))?;
+        .map_err(|e| format!("Failed to read license file: {e}"))?;
 
     let parsed: toml::Value = toml::from_str(&content)
-        .map_err(|e| format!("Invalid TOML format: {}", e))?;
+        .map_err(|e| format!("Invalid TOML format: {e}"))?;
 
     let license: SigilLicense = parsed.get("license")
         .ok_or("Missing [license] block".to_string())
-        .and_then(|val| toml::from_str(&val.to_string()).map_err(|e| format!("Deserialize error: {}", e)))?;
+        .and_then(|val| toml::from_str(&val.to_string()).map_err(|e| format!("Deserialize error: {e}")))?;
 
     let now = Utc::now();
     let mut score = 1.0;
@@ -109,12 +109,11 @@ pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint
     let audit = AuditEvent::new(
         &license.owner.hash_id,
         "validate_license",
-        &license.id,
-        "license_validator.rs"
+        Some(&license.id),
+        "license_validator.rs",
+        &license.loa,
     )
-    .with_severity(if score >= 0.9 { LogLevel::Info } else { LogLevel::Warn })
-    .with_context(format!("License validation result: {}", msg).to_string());
-
+    .with_severity(if score >= 0.9 { LogLevel::Info } else { LogLevel::Warn });
 
     Ok(LicenseValidationResult {
         license,
@@ -125,14 +124,6 @@ pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint
     })
 }
 
-
-
-
-
-
-
-use crate::loa::LOA;
-
-pub fn load_current_loa() -> LOA {
-    LOA::Root
+pub fn load_current_loa() -> Result<LOA, String> {
+    Ok(LOA::Root)
 }

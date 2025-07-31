@@ -1,27 +1,15 @@
-use crate::audit_store::write_chain;
-use crate::trust_registry::{register_scope, release_scope};
-use axum::Router;
-use crate::session_context::SessionContext;
-
-pub fn build_routes<S>() -> Router
-where
-    S: Clone + Send + Sync + 'static,
-{
-    Router::new()
-}
-
-
+use crate::loa::LOA;
+use crate::audit::AuditEvent;
+use std::str::FromStr;
 use axum::{
-    extract::{Extension, Json},
+    extract::Extension,
+    response::Json,
     routing::{get, post},
     Router,
 };
+use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-
 use crate::sigil_runtime_core::SigilRuntimeCore;
-use crate::audit::AuditEvent;
-use crate::loa::LOA;
 
 #[derive(Debug, Deserialize)]
 pub struct TrustCheckRequest {
@@ -48,6 +36,7 @@ pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) 
         .layer(Extension(runtime))
 }
 
+#[axum::debug_handler]
 async fn check_trust(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
     Json(req): Json<TrustCheckRequest>,
@@ -62,7 +51,7 @@ async fn check_trust(
     ) {
         (Ok(allowed), eval) => (
             allowed,
-            eval.score,
+            eval.score.into(),
             runtime.active_model_id.clone(),
             Some(runtime.threshold),
         ),
@@ -77,6 +66,7 @@ async fn check_trust(
     })
 }
 
+#[axum::debug_handler]
 async fn trust_status(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
 ) -> Json<serde_json::Value> {

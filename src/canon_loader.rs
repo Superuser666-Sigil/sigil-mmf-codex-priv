@@ -14,14 +14,65 @@ use crate::sigil_integrity::WitnessSignature;
 pub struct CanonNode {
     pub id: String,
     pub title: String,
-    pub content: String,
     pub trust_level: String,
     pub flags: Vec<String>,
-    pub checksum: String,
-    pub source: String,
-    pub section: String,
     pub tags: Vec<String>,
+    pub content: serde_json::Value,
     pub codex_commentary: serde_json::Value,
+}
+
+impl CanonNode {
+    pub fn new(id: &str, title: &str, trust_level: &str) -> Self {
+        CanonNode {
+            id: id.to_string(),
+            title: title.to_string(),
+            trust_level: trust_level.to_string(),
+            flags: Vec::new(),
+            tags: Vec::new(),
+            content: serde_json::Value::Null,
+            codex_commentary: serde_json::Value::Null,
+        }
+    }
+    
+    pub fn from_json(json: &serde_json::Value) -> Result<Self, String> {
+        let id = json.get("id")
+            .and_then(|id| id.as_str())
+            .ok_or("Missing 'id' field")?;
+            
+        let title = json.get("name")
+            .and_then(|name| name.as_str())
+            .unwrap_or("Untitled");
+            
+        let trust_level = json.get("trust_level")
+            .and_then(|tl| tl.as_str())
+            .unwrap_or("unverified");
+            
+        let mut node = CanonNode::new(id, title, trust_level);
+        
+        // Parse flags if present
+        if let Some(flags) = json.get("flags") {
+            if let Some(flags_array) = flags.as_array() {
+                for flag in flags_array {
+                    if let Some(flag_str) = flag.as_str() {
+                        node.flags.push(flag_str.to_string());
+                    }
+                }
+            }
+        }
+        
+        // Parse tags if present
+        if let Some(tags) = json.get("tags") {
+            if let Some(tags_array) = tags.as_array() {
+                for tag in tags_array {
+                    if let Some(tag_str) = tag.as_str() {
+                        node.tags.push(tag_str.to_string());
+                    }
+                }
+            }
+        }
+        
+        Ok(node)
+    }
 }
 
 pub fn load_from_jsonl(dir: &Path) -> Result<Vec<CanonNode>, String> {
@@ -32,7 +83,7 @@ pub fn load_from_jsonl(dir: &Path) -> Result<Vec<CanonNode>, String> {
         let path = entry.path();
 
         if path.extension().map(|ext| ext == "jsonl").unwrap_or(false) {
-            let file = File::open(&path).map_err(|e| format!("Error opening {:?}: {}", path, e))?;
+            let file = File::open(&path).map_err(|e| format!("Error opening {path:?}: {e}"))?;
             let reader = BufReader::new(file);
 
             for line in reader.lines() {
@@ -66,11 +117,37 @@ pub fn load_from_jsonl(dir: &Path) -> Result<Vec<CanonNode>, String> {
                     },
                 ]);
 
-                write_chain(&chain)?;
+                write_chain(chain)?;
                 nodes.push(node);
             }
         }
     }
 
+    Ok(nodes)
+}
+
+// Missing function that is referenced in other modules
+pub fn load_canon_entries(file: &str) -> Result<Vec<CanonNode>, String> {
+    let content = std::fs::read_to_string(file)
+        .map_err(|e| format!("Failed to read canon file '{file}': {e}"))?;
+    
+    let json: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse canon JSON from '{file}': {e}"))?;
+    
+    let mut nodes = Vec::new();
+    
+    if let Some(entries) = json.get("entries") {
+        if let Some(entries_array) = entries.as_array() {
+            for entry in entries_array {
+                if let Ok(node) = CanonNode::from_json(entry) {
+                    nodes.push(node);
+                } else {
+                    println!("Warning: Failed to parse canon entry: {entry:?}");
+                }
+            }
+        }
+    }
+    
+    println!("Loaded {} canon entries from '{}'", nodes.len(), file);
     Ok(nodes)
 }

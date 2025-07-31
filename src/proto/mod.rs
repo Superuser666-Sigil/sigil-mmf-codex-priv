@@ -5,3 +5,6 @@ pub mod rpc;
 
 /// Reminder: No protocol logic is implemented yet.
 /// RPC calls must be audited and wrapped in ReasoningChain when implemented.
+pub fn placeholder() {
+    // This function exists to satisfy the module structure
+}

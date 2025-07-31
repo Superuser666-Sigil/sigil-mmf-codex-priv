@@ -7,11 +7,11 @@ use chrono::Utc;
 
 pub fn export_all(output_path: &str) -> Result<(), &'static str> {
     let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-    let full_path = format!("{}_{}.zip", output_path, timestamp);
+    let full_path = format!("{output_path}_{timestamp}.zip");
 
     let file = File::create(&full_path).map_err(|_| "Failed to create export file")?;
     let mut zip = zip::ZipWriter::new(file);
-    let options = FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let options: FileOptions<()> = FileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
     let targets = vec![
         ("data/vault.json", "vault.json"),
@@ -34,7 +34,7 @@ pub fn export_all(output_path: &str) -> Result<(), &'static str> {
                     let mut buffer = Vec::new();
                     File::open(&file_path).and_then(|mut f| f.read_to_end(&mut buffer)).map_err(|_| "Canon read fail")?;
                     let filename = file_path.file_name().unwrap().to_string_lossy();
-                    zip.start_file(format!("canon/{}", filename), options).map_err(|_| "Canon zip fail")?;
+                    zip.start_file(format!("canon/{filename}"), options).map_err(|_| "Canon zip fail")?;
                     zip.write_all(&buffer).map_err(|_| "Canon zip write fail")?;
                 }
             }
@@ -42,6 +42,6 @@ pub fn export_all(output_path: &str) -> Result<(), &'static str> {
     }
 
     zip.finish().map_err(|_| "Zip finish fail")?;
-    println!("[SigilExporter] Data exported to: {}", full_path);
+    println!("[SigilExporter] Data exported to: {full_path}");
     Ok(())
 }

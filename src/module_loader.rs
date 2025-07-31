@@ -2,28 +2,43 @@
 
 use std::fs;
 use std::path::Path;
-use crate::canon_validator::validate_canon_file;
+use toml::Value;
 
-pub fn load_module(manifest_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let raw = fs::read_to_string(manifest_path)?;
-    let module: toml::de::Value = toml::de::from_str(&raw)?;
+pub fn load_module_manifest(path: &Path) -> Result<Value, Box<dyn std::error::Error>> {
+    let raw = fs::read_to_string(path)?;
+    let module: Value = toml::from_str(&raw)?;
+    Ok(module)
+}
 
-    // Extract module info
-    let module_id = module["module"]["id"].as_str().unwrap_or("Unknown");
-    println!("Loading module: {}", module_id);
+pub fn load_and_run_modules(ctx: &crate::session_context::SessionContext) {
+    println!("[ModuleLoader] Loading modules for session {}", ctx.session_id);
 
-    // Perform Canon Validation (Checks for schema compliance)
-    let canon_path = Path::new("modules/mmf-shadowrun-core/canon/sr6e.json");
-    match validate_canon_file(&canon_path) {
-        Ok(_) => println!("Canon file validated successfully."),
-        Err(e) => {
-            println!("ERROR: Canon validation failed: {}", e);
-            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)));
-        }
+    let modules_dir = Path::new("src/modules");
+    if !modules_dir.exists() {
+        println!("[ModuleLoader] No modules directory found.");
+        return;
     }
 
-    // Proceed to load the rest of the module or abort if validation fails
-    println!("Module loaded successfully: {}", module_id);
+    for entry in fs::read_dir(modules_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
 
-    Ok(())
+        if path.is_dir() {
+            let manifest_path = path.join("manifest.toml");
+            if manifest_path.exists() {
+                match load_module_manifest(&manifest_path) {
+                    Ok(manifest) => {
+                        if let Some(module) = manifest.get("module") {
+                            let name = module.get("name").and_then(|v| v.as_str()).unwrap_or("Unknown");
+                            let version = module.get("version").and_then(|v| v.as_str()).unwrap_or("Unknown");
+                            println!("[ModuleLoader] Running module: {name} (v{version})");
+                        }
+                    }
+                    Err(e) => {
+                        println!("[ModuleLoader] Failed to load manifest for {path:?}: {e}");
+                    }
+                }
+            }
+        }
+    }
 }

@@ -1,5 +1,8 @@
+use crate::loa::LOA;
+
 pub struct SessionContext {
     pub session_id: String,
+    pub loa: LOA,
 }
 
 pub fn detect_ephemeral_mode() -> bool {
@@ -7,11 +10,10 @@ pub fn detect_ephemeral_mode() -> bool {
 }
 
 impl SessionContext {
-    pub fn new(session_id: &str, loa: crate::loa::LOA) -> Self {
+    pub fn new(session_id: &str, loa: LOA) -> Self {
         SessionContext {
             session_id: session_id.to_string(),
             loa,
-            ..Default::default()
         }
     }
 }

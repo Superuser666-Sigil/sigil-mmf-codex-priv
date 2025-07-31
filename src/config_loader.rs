@@ -1,5 +1,5 @@
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct IRLConfig {
     pub enforcement_mode: String,
     pub active_model: Option<String>,
@@ -28,7 +28,7 @@ use figment::{
 };
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct MMFConfig {
     pub license_secret: String,
     pub db_backend: String,
@@ -37,7 +37,7 @@ pub struct MMFConfig {
     pub trust: TrustConfig,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct TrustConfig {
     #[serde(default = "default_loa")]
     pub default_loa: String,

@@ -18,17 +18,19 @@ pub struct IRLResponse {
 
 pub fn query_phi4_executor(context: &str, input: &str) -> Result<IRLResponse, Box<dyn Error>> {
     let client = reqwest::blocking::Client::new();
-    let payload = IRLQuery {
-        context: context.into(),
-        input: input.into(),
-    };
+    let payload = serde_json::json!({
+        "context": context,
+        "input": input,
+        "model": "phi-4",
+        "stream": false
+    });
 
     let res = client
         .post("http://localhost:11434/irl")  // ← Change if your Phi-4 endpoint is different
-        .json(&payload)
-        .send()?
-        .error_for_status()?;
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_string(&payload).unwrap())
+        .send()?;
 
-    let parsed: IRLResponse = res.json()?;
+    let parsed = res.json::<IRLResponse>()?;
     Ok(parsed)
 }

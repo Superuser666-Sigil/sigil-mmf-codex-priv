@@ -9,49 +9,49 @@ use std::fs;
 
 #[test]
 pub fn write_and_read_entry_roundtrip() {
-    let temp_dir = tempdir().expect("failed to create temp dir");
-    let path = temp_dir.path().to_str().expect("invalid temp path");
+    let temp_dir = tempdir().expect("should be able to create temp dir for test");
+    let path = temp_dir.path().to_str().expect("temp path should be valid UTF-8");
 
-    let store = CanonStoreSled::new(path, true, None);
+    let mut store = CanonStoreSled::new(path).expect("should be able to create CanonStoreSled");
     let id = "unit_test_doc";
 
     let entry = TrustedKnowledgeEntry {
-        model_id: Some("test_model".to_string()),
-        allowed: true,
-        score: 0.95,
-        threshold: Some(0.8),
-        trace_id: Some("trace-123".to_string()),
+        id: id.to_string(),
+        loa_required: LOA::Observer,
+        verdict: crate::trusted_knowledge::SigilVerdict::Allow,
+        category: "test".to_string(),
+        content: "test content".to_string(),
     };
 
     let loa = LOA::Root;
 
-    store.write(id, &entry, &loa).expect("write failed");
+    store.add_entry(entry.clone(), &loa, true).expect("should be able to write entry");
 
-    let retrieved = store.read(id, &loa).expect("read failed");
+    let retrieved = store.load_entry(id, &loa);
 
-    assert!(retrieved.is_some());
-    let item = retrieved.unwrap();
-    assert_eq!(item.allowed, true);
-    assert_eq!(item.model_id.unwrap(), "test_model");
+    assert!(retrieved.is_some(), "should retrieve the stored entry");
+    let item = retrieved.expect("retrieved item should be Some");
+    assert_eq!(item.verdict, crate::trusted_knowledge::SigilVerdict::Allow);
+    assert_eq!(item.id, "unit_test_doc");
 }
 
 #[test]
 pub fn reject_read_without_permission() {
-    let temp_dir = tempdir().expect("failed to create temp dir");
-    let path = temp_dir.path().to_str().unwrap();
+    let temp_dir = tempdir().expect("should be able to create temp dir for test");
+    let path = temp_dir.path().to_str().expect("temp path should be valid UTF-8");
 
-    let store = CanonStoreSled::new(path, true, None);
+    let mut store = CanonStoreSled::new(path).expect("should be able to create CanonStoreSled");
 
     let entry = TrustedKnowledgeEntry {
-        model_id: None,
-        allowed: false,
-        score: 0.3,
-        threshold: None,
-        trace_id: None,
+        id: "restricted".to_string(),
+        loa_required: LOA::Root,  // Requires root access
+        verdict: crate::trusted_knowledge::SigilVerdict::Deny,
+        category: "restricted".to_string(),
+        content: "restricted content".to_string(),
     };
 
-    store.write("restricted", &entry, &LOA::Root).unwrap();
+    store.add_entry(entry, &LOA::Root, true).expect("should be able to write restricted entry");
 
-    let result = store.read("restricted", &LOA::Public);
-    assert!(result.is_err());
+    let result = store.load_entry("restricted", &LOA::Guest);  // Try to access with guest LOA
+    assert!(result.is_none(), "guest should not be able to access root-required entry");
 }

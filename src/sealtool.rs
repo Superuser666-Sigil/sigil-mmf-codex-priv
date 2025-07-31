@@ -2,8 +2,7 @@
 use sha2::{Sha256, Digest};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use std::io::{Read, Write};
-use std::path::Path;
+use std::io::Read;
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -21,7 +20,7 @@ pub fn seal_file(path: &str, out_path: &str) -> Result<(), &'static str> {
     let hash = Sha256::digest(content.as_bytes());
     let sealed = SealedCanonEntry {
         entry,
-        sha256: format!("{:x}", hash),
+        sha256: format!("{hash:x}"),
     };
 
     let out_json = serde_json::to_string_pretty(&sealed).map_err(|_| "Serialization error")?;

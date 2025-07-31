@@ -9,7 +9,7 @@ pub struct WitnessSignature {
 
 pub fn validate_witnesses(
     witnesses: &[WitnessSignature],
-    required_loa: &LoaLevel,
+    _required_loa: &LoaLevel,
     _payload: &str,
 ) -> bool {
     if witnesses.len() < 3 {

@@ -1,5 +1,5 @@
 
-use sled::{Db, IVec};
+use sled::Db;
 use crate::sigil_encrypt::{encrypt, decrypt, decode_base64_key};
 use crate::canon_store::CanonStore;
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
@@ -8,13 +8,12 @@ use serde_json;
 
 pub struct CanonStoreSled {
     db: Db,
-    allow_operator_write: bool,
 }
 
 impl CanonStoreSled {
-    pub fn new(path: &str, allow_operator_write: bool) -> Self {
+    pub fn new(path: &str) -> Self {
         let db = sled::open(path).expect("Failed to open sled database");
-        Self { db, allow_operator_write }
+        Self { db }
     }
 }
 
@@ -40,7 +39,7 @@ impl CanonStore for CanonStoreSled {
     }
 
     fn add_entry(&mut self, entry: TrustedKnowledgeEntry, loa: &LOA, _allow_operator_write: bool) -> Result<(), &'static str> {
-        if !can_write_canon(loa, self.allow_operator_write) {
+        if !can_write_canon(loa) {
             return Err("Insufficient LOA to write canon entry");
         }
 
@@ -68,7 +67,7 @@ impl CanonStore for CanonStoreSled {
         self.db.iter()
             .filter_map(|item| item.ok())
             .filter_map(|(_, val)| serde_json::from_slice::<TrustedKnowledgeEntry>(&val).ok())
-            .filter(|entry| category.map_or(true, |cat| entry.category == cat))
+            .filter(|entry| category.is_none_or(|cat| entry.category == cat))
             .collect()
     }
 }

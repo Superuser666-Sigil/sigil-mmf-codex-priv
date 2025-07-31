@@ -7,6 +7,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 use crate::loa::LOA;
+use crate::sigil_encrypt::{encrypt, decrypt, decode_base64_key};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct VaultMemoryBlock {
@@ -27,23 +28,18 @@ impl SigilVault {
     pub fn new(path: &str) -> Self {
         let mut memory = HashMap::new();
         if Path::new(path).exists() {
-            
-    if let Ok(mut file) = File::open(path) {
-        let key_opt = std::env::var("SIGIL_AES_KEY").ok()
-            .and_then(|k| decode_base64_key(&k).ok());
+            if let Ok(mut file) = File::open(path) {
+                let key_opt = std::env::var("SIGIL_AES_KEY").ok()
+                    .and_then(|k| decode_base64_key(&k).ok());
 
-                let mut contents = String::new();
-                
-        let mut raw = Vec::new();
-        if file.read_to_end(&mut raw).is_ok() {
-            let decrypted = if let Some(key) = key_opt {
-                decrypt(&raw, &key).unwrap_or_else(|_| vec![])
-            } else {
-                raw
-            };
-            if let Ok(loaded) = serde_json::from_slice::<Vec<VaultMemoryBlock>>(&decrypted) {
-
-                    if let Ok(loaded) = serde_json::from_str::<Vec<VaultMemoryBlock>>(&contents) {
+                let mut raw = Vec::new();
+                if file.read_to_end(&mut raw).is_ok() {
+                    let decrypted = if let Some(key) = key_opt {
+                        decrypt(&raw, &key).unwrap_or_else(|_| vec![])
+                    } else {
+                        raw
+                    };
+                    if let Ok(loaded) = serde_json::from_slice::<Vec<VaultMemoryBlock>>(&decrypted) {
                         for block in loaded {
                             memory.insert(block.id.clone(), block);
                         }
@@ -88,24 +84,21 @@ impl SigilVault {
         false
     }
 
-    
-fn persist(&self) -> Result<(), &'static str> {
-    let key_opt = std::env::var("SIGIL_AES_KEY").ok()
-        .and_then(|k| decode_base64_key(&k).ok());
+    fn persist(&self) -> Result<(), &'static str> {
+        let key_opt = std::env::var("SIGIL_AES_KEY").ok()
+            .and_then(|k| decode_base64_key(&k).ok());
 
-        
-    let vec: Vec<_> = self.memory.values()
-        .filter(|b| !b.deleted)
-        .cloned()
-        .collect();
+        let vec: Vec<_> = self.memory.values()
+            .filter(|b| !b.deleted)
+            .cloned()
+            .collect();
 
-        
-    let serialized = serde_json::to_vec(&vec).map_err(|_| "Serialization error")?;
-    let encrypted = if let Some(key) = key_opt {
-        encrypt(&serialized, &key).map_err(|_| "Encryption error")?
-    } else {
-        serialized
-    };
+        let serialized = serde_json::to_vec(&vec).map_err(|_| "Serialization error")?;
+        let encrypted = if let Some(key) = key_opt {
+            encrypt(&serialized, &key).map_err(|_| "Encryption error")?
+        } else {
+            serialized
+        };
 
         let mut file = OpenOptions::new()
             .create(true)

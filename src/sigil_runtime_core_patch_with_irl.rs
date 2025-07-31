@@ -1,33 +1,27 @@
-use crate::canon_loader::load_canon_entries;
+use crate::canon_loader::CanonNode;
 use crate::canon_validator::validate_entry;
 use crate::irl_executor::evaluate_with_irl;
-use crate::audit::log_audit_event;
-use crate::trusted_knowledge::TrustedKnowledgeEntry;
-use chrono::Utc;
+use crate::audit_chain::ReasoningChain;
 
-pub fn run_sigil_session(canon_path: &str) {
-    match load_canon_entries(canon_path) {
-        Ok(entries) => {
-            for (i, entry) in entries.iter().enumerate() {
-                let result = validate_entry(entry);
-                match result {
-                    Ok(_) => {
-                        println!("Canon entry [{}] validated successfully.", i);
-                        match evaluate_with_irl(entry) {
-                            Ok(score) => println!("IRL score: {:.2}", score),
-                            Err(e) => eprintln!("IRL scoring failed: {}", e),
-                        }
-                    },
-                    Err(e) => {
-                        eprintln!("Validation failed on entry [{}]: {}", i, e);
-                        log_audit_event("ValidationFailed", Some(&entry.id), &format!("{}", e), "Error", Utc::now());
-                    }
-                }
-            }
-        },
-        Err(e) => {
-            eprintln!("Canon load error: {}", e);
-            log_audit_event("CanonLoadFailure", None, &e, "Critical", Utc::now());
-        }
+pub fn process_canon_node_with_irl(node: &CanonNode) -> Result<f64, String> {
+    // Convert CanonNode to serde_json::Value for validation
+    let node_json = serde_json::to_value(node)
+        .map_err(|e| format!("Failed to serialize node: {e}"))?;
+    
+    // Validate the node
+    let result = validate_entry(&node_json);
+    if let Err(e) = result {
+        return Err(format!("Validation failed: {e}"));
     }
+    
+    // Create a reasoning chain for IRL evaluation
+    let mut chain = ReasoningChain::new(
+        format!("Processing canon node: {}", node.id),
+        crate::loa::LoaLevel::Observer
+    );
+    
+    // Evaluate with IRL
+    let score = evaluate_with_irl(&mut chain);
+    
+    Ok(score)
 }
