@@ -2,6 +2,7 @@ use ed25519_dalek::{SigningKey, VerifyingKey, Signature, Signer, Verifier};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::PathBuf;
 use crate::errors::SigilResult;
 use base64::Engine;
 
@@ -25,8 +26,7 @@ pub enum KeyType {
 impl SigilKeyPair {
     /// Generate a new Ed25519 key pair
     pub fn generate(key_id: &str, key_type: KeyType) -> SigilResult<Self> {
-        let mut csprng = OsRng;
-        let signing_key = SigningKey::generate(&mut csprng);
+        let signing_key = SigningKey::generate(&mut OsRng);
         let verifying_key = signing_key.verifying_key();
         
         let public_key = base64::engine::general_purpose::STANDARD.encode(verifying_key.to_bytes());
@@ -147,6 +147,73 @@ impl KeyManager {
     }
 }
 
+/// Get the platform-appropriate home directory
+pub fn get_home_dir() -> SigilResult<PathBuf> {
+    // Try platform-specific environment variables
+    let home = if cfg!(target_os = "windows") {
+        std::env::var("USERPROFILE")
+    } else {
+        std::env::var("HOME")
+    };
+    
+    match home {
+        Ok(path) => Ok(PathBuf::from(path)),
+        Err(_) => {
+            // Fallback: try to get home directory from current user
+            if let Some(home) = dirs::home_dir() {
+                Ok(home)
+            } else {
+                Err(crate::errors::SigilError::io("getting home directory", 
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "Home directory not found")))
+            }
+        }
+    }
+}
+
+/// Get the secure key directory path for the current platform
+pub fn get_secure_key_dir() -> SigilResult<PathBuf> {
+    let home = get_home_dir()?;
+    let mut key_dir = home;
+    key_dir.push(".sigil");
+    key_dir.push("keys");
+    Ok(key_dir)
+}
+
+/// Ensure the secure key directory exists
+pub fn ensure_secure_key_dir() -> SigilResult<PathBuf> {
+    let key_dir = get_secure_key_dir()?;
+    fs::create_dir_all(&key_dir)
+        .map_err(|e| crate::errors::SigilError::io("creating secure key directory", e))?;
+    Ok(key_dir)
+}
+
+/// Find a key file in secure locations
+pub fn find_key_file(key_id: &str) -> Option<PathBuf> {
+    // First check current directory
+    let current_path = PathBuf::from(format!("{}.json", key_id));
+    if current_path.exists() {
+        return Some(current_path);
+    }
+    
+    // Then check secure key directory
+    if let Ok(mut secure_path) = get_secure_key_dir() {
+        secure_path.push(format!("{}.json", key_id));
+        if secure_path.exists() {
+            return Some(secure_path);
+        }
+    }
+    
+    None
+}
+
+/// Get the default path for a key file
+pub fn get_default_key_path(key_id: &str) -> SigilResult<PathBuf> {
+    let key_dir = ensure_secure_key_dir()?;
+    let mut key_path = key_dir;
+    key_path.push(format!("{}.json", key_id));
+    Ok(key_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,7 +240,7 @@ mod tests {
     #[test]
     fn test_key_manager() {
         let mut manager = KeyManager::new();
-        let key_pair = manager.generate_key("test_key", KeyType::LicenseSigning).unwrap();
+        let _key_pair = manager.generate_key("test_key", KeyType::LicenseSigning).unwrap();
         
         let data = b"Test data";
         let signature = manager.sign_with_key("test_key", data).unwrap();

@@ -26,6 +26,10 @@ secrets/
 dev_license_claim.json
 test_license_key.json
 
+# Key storage directory
+~/.sigil/keys/
+.sigil/keys/
+
 # Archives and compressed files
 *.7z
 *.zip
@@ -41,6 +45,15 @@ mingw.7z
 *.swo
 *~
 .history/
+
+# CI/CD artifacts
+.github/workflows/cache/
+target/debug/deps/
+target/release/deps/
+coverage/
+.coverage/
+cargo-audit.json
+deny.toml.bak
 
 # OS files
 .DS_Store

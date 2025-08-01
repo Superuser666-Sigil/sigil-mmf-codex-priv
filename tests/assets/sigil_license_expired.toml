@@ -2,7 +2,7 @@
 id = "root.local.dev"
 issuedAt = "2024-01-01T00:00:00Z"
 expiresAt = "2022-01-01T00:00:00Z"
-loa = "ROOT"
+loa = "Root"
 scope = ["*"]
 issuer = "davet"
 version = "1.0"

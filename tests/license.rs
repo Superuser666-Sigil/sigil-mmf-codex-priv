@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::license_validator::validate_license;
+    use mmf_sigil::license_validator::validate_license;
     
     #[test]
     fn test_valid_license_should_pass() {

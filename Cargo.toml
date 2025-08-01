@@ -12,33 +12,56 @@ name = "trainer"
 path = "src/bin/trainer.rs"
 
 [dependencies]
-axum = { version = "0.8.4", features = ["macros"] }
-chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "4.5.42", features = ["derive"] }
+# Core dependencies
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1", features = ["full"] }
-uuid = { version = "1", features = ["v4", "serde"] }
-
-base64 = "0.22.1"
-aes-gcm = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.0", features = ["full"] }
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+anyhow = "1.0"
+thiserror = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+base64 = "0.21"
 sha2 = "0.10"
-zip = "4.3.0"
+ed25519-dalek = { version = "2.0", features = ["rand_core"] }
 sled = "0.34"
-figment = { version = "0.10", features = ["env", "toml"] }
-log = "0.4"
-toml = "0.9.4"
-lazy_static = "1.4"
-reqwest = { version = "0.12.22", features = ["blocking", "json"] }
-thiserror = "2.0.12"
-burn = { version = "0.18.0", features = ["train", "candle", "network"] }
-burn-candle = "0.18.0"
-burn-import = { version = "0.18.0", features = ["onnx"] }
-indicatif = "0.18.0"
-npyz = "0.8.3"
-csv = "1.1"
+toml = "0.8"
+clap = { version = "4.0", features = ["derive"] }
 
 # Cryptographic dependencies
-ed25519-dalek = { version = "2.0", features = ["rand_core", "serde"] }
+aes-gcm = "0.10"
 rand = "0.8"
 getrandom = "0.2"
+
+# Cross-platform utilities
+dirs = "5.0"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+
+# File handling
+zip = "0.6"
+
+# Configuration
+figment = { version = "0.10", features = ["env", "toml"] }
+
+# Logging
+log = "0.4"
+
+# Utilities
+lazy_static = "1.4"
+
+# Candle ML framework (replacing Burn)
+candle-core = "0.9.1"
+candle-nn = "0.9.1"
+candle-transformers = "0.9.1"
+
+# ONNX support
+tract-onnx = "0.21.10"
+
+[dev-dependencies]
+tempfile = "3.0"

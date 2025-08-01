@@ -81,12 +81,15 @@ pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint
     let content = fs::read_to_string(Path::new(path))
         .map_err(|e| format!("Failed to read license file: {e}"))?;
 
-    let parsed: toml::Value = toml::from_str(&content)
-        .map_err(|e| format!("Invalid TOML format: {e}"))?;
-
-    let license: SigilLicense = parsed.get("license")
-        .ok_or("Missing [license] block".to_string())
-        .and_then(|val| toml::from_str(&val.to_string()).map_err(|e| format!("Deserialize error: {e}")))?;
+    #[derive(Deserialize)]
+    struct LicenseWrapper {
+        license: SigilLicense,
+    }
+    
+    let wrapper: LicenseWrapper = toml::from_str(&content)
+        .map_err(|e| format!("Deserialize error: {e}"))?;
+    
+    let license = wrapper.license;
 
     let now = Utc::now();
     let mut score = 1.0;

@@ -1,5 +1,13 @@
 use clap::{Parser, Subcommand};
 
+/// Helper function to find a key file in secure locations
+fn find_key_file(key_id: &str) -> Option<String> {
+    match crate::key_manager::find_key_file(key_id) {
+        Some(path) => Some(path.to_string_lossy().to_string()),
+        None => None,
+    }
+}
+
 /// Top-level CLI interface for Sigil
 #[derive(Parser)]
 #[command(name = "sigil", version = "0.1.0", author = "LOA::Root", about = "Sigil Modular AI Runtime CLI")]
@@ -153,7 +161,22 @@ pub fn dispatch(cli: Cli) {
                             Err(e) => eprintln!("❌ Failed to save key pair: {}", e),
                         }
                     } else {
-                        println!("🔑 Private key: {}", key_pair.private_key);
+                        // Save to secure directory by default
+                        match crate::key_manager::get_default_key_path(&key_id) {
+                            Ok(default_path) => {
+                                match key_pair.save_to_file(&default_path.to_string_lossy()) {
+                                    Ok(_) => println!("💾 Key pair saved to secure location: {}", default_path.display()),
+                                    Err(e) => {
+                                        eprintln!("❌ Failed to save key pair: {}", e);
+                                        println!("🔑 Private key: {}", key_pair.private_key);
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                eprintln!("❌ Failed to create secure key directory: {}", e);
+                                println!("🔑 Private key: {}", key_pair.private_key);
+                            }
+                        }
                     }
                 },
                 Err(e) => eprintln!("❌ Failed to generate key pair: {}", e),
@@ -161,8 +184,16 @@ pub fn dispatch(cli: Cli) {
         }
         Commands::Sign { key_id, data, output } => {
             
-            // Load the key from file or use a default path
-            let key_path = format!("{}.json", key_id);
+            // Find the key file in secure locations
+            let key_path = match find_key_file(&key_id) {
+                Some(path) => path,
+                None => {
+                    eprintln!("❌ Key file not found: {}.json", key_id);
+                    eprintln!("   Searched in: current directory and secure key directory");
+                    return;
+                }
+            };
+            
             match crate::key_manager::SigilKeyPair::load_from_file(&key_path) {
                 Ok(key_pair) => {
                     match key_pair.sign(data.as_bytes()) {
@@ -184,8 +215,16 @@ pub fn dispatch(cli: Cli) {
             }
         }
         Commands::Verify { key_id, data, signature } => {
-            // Load the key from file
-            let key_path = format!("{}.json", key_id);
+            // Find the key file in secure locations
+            let key_path = match find_key_file(&key_id) {
+                Some(path) => path,
+                None => {
+                    eprintln!("❌ Key file not found: {}.json", key_id);
+                    eprintln!("   Searched in: current directory and secure key directory");
+                    return;
+                }
+            };
+            
             match crate::key_manager::SigilKeyPair::load_from_file(&key_path) {
                 Ok(key_pair) => {
                     match key_pair.verify(data.as_bytes(), &signature) {

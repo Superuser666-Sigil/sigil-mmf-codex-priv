@@ -1,0 +1,75 @@
+# Dependabot configuration for Sigil MMF Codex
+# Automatically keep dependencies up to date for security
+
+version: 2
+updates:
+  # Rust dependencies
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "10:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "Superuser666-Sigil"
+    assignees:
+      - "Superuser666-Sigil"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "rust"
+    # Group related updates together
+    groups:
+      burn-ecosystem:
+        patterns:
+          - "burn*"
+        
+      crypto-dependencies:
+        patterns:
+          - "*crypto*"
+          - "*aes*"
+          - "*sha*"
+          - "*ed25519*"
+          - "*dalek*"
+          
+      tokio-ecosystem:
+        patterns:
+          - "tokio*"
+          - "axum*"
+          - "tower*"
+          - "hyper*"
+          
+      serde-ecosystem:
+        patterns:
+          - "serde*"
+          
+      clap-ecosystem:
+        patterns:
+          - "clap*"
+          
+      dev-dependencies:
+        dependency-type: "development"
+        patterns:
+          - "*"
+
+  # GitHub Actions workflow dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "10:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "Superuser666-Sigil"
+    assignees:
+      - "Superuser666-Sigil"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
