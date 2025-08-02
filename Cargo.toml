@@ -35,7 +35,7 @@ clap = { version = "4.0", features = ["derive"] }
 # Cryptographic dependencies
 aes-gcm = "0.10"
 rand = "0.9"
-getrandom = "0.2"
+getrandom = "0.3"
 
 # Cross-platform utilities
 dirs = "6.0"
