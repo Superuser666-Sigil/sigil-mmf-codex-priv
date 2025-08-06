@@ -1,15 +1,15 @@
-use crate::loa::LOA;
 use crate::audit::AuditEvent;
-use std::str::FromStr;
+use crate::loa::LOA;
+use crate::sigil_runtime_core::SigilRuntimeCore;
 use axum::{
     extract::Extension,
     response::Json,
     routing::{get, post},
     Router,
 };
-use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
-use crate::sigil_runtime_core::SigilRuntimeCore;
+use std::str::FromStr;
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Deserialize)]
 pub struct TrustCheckRequest {
@@ -43,7 +43,13 @@ async fn check_trust(
 ) -> Json<TrustCheckResponse> {
     let runtime = runtime.read().unwrap();
     let loa = LOA::from_str(&req.loa).unwrap_or(LOA::Guest);
-    let event = AuditEvent::new(&req.who, &req.action, req.target.as_deref(), &req.session_id, &loa);
+    let event = AuditEvent::new(
+        &req.who,
+        &req.action,
+        req.target.as_deref(),
+        &req.session_id,
+        &loa,
+    );
 
     let (allowed, score, model_id, threshold) = match (
         runtime.validate_action(&event),

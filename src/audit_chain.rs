@@ -1,11 +1,11 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use std::collections::HashMap;
-use sha2::{Sha256, Digest};
 use crate::loa::LoaLevel;
 use crate::module_scope::ModuleScope;
 use crate::sigil_integrity::WitnessSignature;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum Verdict {
@@ -122,7 +122,9 @@ impl ReasoningChain {
         }
 
         if self.verdict == Verdict::Allow && !self.irl.allowed {
-            return Err("Inconsistent verdict and IRL trust: verdict=Allow but IRL.allowed=false".into());
+            return Err(
+                "Inconsistent verdict and IRL trust: verdict=Allow but IRL.allowed=false".into(),
+            );
         }
 
         if self.verdict == Verdict::Allow && self.witnesses.len() < 3 {
@@ -152,23 +154,23 @@ pub struct FrozenChain {
     pub chain_id: String,
     pub frozen_at: DateTime<Utc>,
     pub version: String,
-    
+
     // Cryptographic integrity
     pub content_hash: String,
     pub signature: String,
     pub merkle_root: String,
-    
+
     // Training record data
     pub input_snapshot: InputSnapshot,
     pub reasoning_trace: ReasoningTrace,
     pub output_snapshot: OutputSnapshot,
     pub metadata: TrainingMetadata,
-    
+
     // Lineage tracking
     pub parent_chain_ids: Vec<String>,
     pub dataset_version: String,
     pub model_version: String,
-    
+
     // Verification data
     pub witnesses: Vec<CryptographicWitness>,
     pub verification_proofs: Vec<VerificationProof>,
@@ -245,9 +247,7 @@ pub struct VerificationProof {
 }
 
 impl FrozenChain {
-    pub fn freeze_reasoning_chain(
-        chain: ReasoningChain,
-    ) -> Result<Self, String> {
+    pub fn freeze_reasoning_chain(chain: ReasoningChain) -> Result<Self, String> {
         // Ensure reasoning is complete
         if chain.verdict == Verdict::Defer {
             return Err("Cannot freeze incomplete reasoning chain".into());
@@ -271,11 +271,8 @@ impl FrozenChain {
         let signature = format!("sig_{}", &content_hash[..16]);
 
         // Generate Merkle root
-        let merkle_root = Self::generate_merkle_root(
-            &input_snapshot,
-            &reasoning_trace,
-            &output_snapshot,
-        )?;
+        let merkle_root =
+            Self::generate_merkle_root(&input_snapshot, &reasoning_trace, &output_snapshot)?;
 
         // Create immutable frozen record
         Ok(FrozenChain {
@@ -292,12 +289,16 @@ impl FrozenChain {
             parent_chain_ids: Vec::new(),
             dataset_version: "1.0".to_string(),
             model_version: metadata.model_id.clone(),
-            witnesses: chain.witnesses.iter().map(|w| CryptographicWitness {
-                witness_id: w.witness_id.clone(),
-                signature: w.signature.clone(),
-                timestamp: Utc::now(),
-                authority: w.witness_id.clone(),
-            }).collect(),
+            witnesses: chain
+                .witnesses
+                .iter()
+                .map(|w| CryptographicWitness {
+                    witness_id: w.witness_id.clone(),
+                    signature: w.signature.clone(),
+                    timestamp: Utc::now(),
+                    authority: w.witness_id.clone(),
+                })
+                .collect(),
             verification_proofs: Vec::new(),
         })
     }
@@ -309,14 +310,16 @@ impl FrozenChain {
         metadata: &TrainingMetadata,
     ) -> Result<String, String> {
         let mut hasher = Sha256::new();
-        
+
         // Hash each component
         hasher.update(&input.input_hash);
         hasher.update(&reasoning.reasoning_hash);
         hasher.update(&output.output_hash);
-        hasher.update(&serde_json::to_string(metadata)
-            .map_err(|e| format!("Metadata serialization failed: {e}"))?);
-        
+        hasher.update(
+            &serde_json::to_string(metadata)
+                .map_err(|e| format!("Metadata serialization failed: {e}"))?,
+        );
+
         Ok(format!("{:x}", hasher.finalize()))
     }
 
@@ -358,7 +361,7 @@ impl FrozenChain {
         if !parent_chain.verify_integrity()? {
             return Err("Parent chain integrity verification failed".into());
         }
-        
+
         self.parent_chain_ids.push(parent_chain.chain_id.clone());
         Ok(())
     }
@@ -380,7 +383,7 @@ impl InputSnapshot {
         Ok(InputSnapshot {
             raw_input: chain.input.clone(),
             preprocessed_input: chain.input.clone(), // Will be enhanced with preprocessing
-            input_features: HashMap::new(), // Will be enhanced with feature extraction
+            input_features: HashMap::new(),          // Will be enhanced with feature extraction
             input_metadata: HashMap::new(),
             input_hash,
         })

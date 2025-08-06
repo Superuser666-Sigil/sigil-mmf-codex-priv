@@ -1,12 +1,12 @@
 // Canon-Compliant license_validator.rs
 // Purpose: Validate sigil_license.toml format, emit audit, and return telemetry-safe results
 
+use crate::audit::{AuditEvent, LogLevel};
+use crate::loa::LOA;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use crate::audit::{AuditEvent, LogLevel};
-use crate::loa::LOA;
 use toml;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -77,7 +77,11 @@ pub struct LicenseValidationResult {
 }
 
 /// Validates a sigil_license.toml file against Canon rules and trust policy
-pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint: &str) -> Result<LicenseValidationResult, String> {
+pub fn validate_license(
+    path: &str,
+    expected_runtime: &str,
+    expected_fingerprint: &str,
+) -> Result<LicenseValidationResult, String> {
     let content = fs::read_to_string(Path::new(path))
         .map_err(|e| format!("Failed to read license file: {e}"))?;
 
@@ -85,10 +89,10 @@ pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint
     struct LicenseWrapper {
         license: SigilLicense,
     }
-    
-    let wrapper: LicenseWrapper = toml::from_str(&content)
-        .map_err(|e| format!("Deserialize error: {e}"))?;
-    
+
+    let wrapper: LicenseWrapper =
+        toml::from_str(&content).map_err(|e| format!("Deserialize error: {e}"))?;
+
     let license = wrapper.license;
 
     let now = Utc::now();
@@ -116,7 +120,11 @@ pub fn validate_license(path: &str, expected_runtime: &str, expected_fingerprint
         "license_validator.rs",
         &license.loa,
     )
-    .with_severity(if score >= 0.9 { LogLevel::Info } else { LogLevel::Warn });
+    .with_severity(if score >= 0.9 {
+        LogLevel::Info
+    } else {
+        LogLevel::Warn
+    });
 
     Ok(LicenseValidationResult {
         license,

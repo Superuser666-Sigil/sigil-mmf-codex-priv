@@ -1,6 +1,6 @@
-use std::str::FromStr;
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use serde::{Serialize, Deserialize};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum LOA {
@@ -46,12 +46,17 @@ pub fn enforce(required: LOA, user: LOA) -> Result<(), String> {
     if user >= required {
         Ok(())
     } else {
-        Err(format!("Insufficient LOA: required {required:?}, got {user:?}"))
+        Err(format!(
+            "Insufficient LOA: required {required:?}, got {user:?}"
+        ))
     }
 }
 
 pub fn can_read_canon(user_loa: &LOA) -> bool {
-    matches!(user_loa, LOA::Observer | LOA::Operator | LOA::Mentor | LOA::Root)
+    matches!(
+        user_loa,
+        LOA::Observer | LOA::Operator | LOA::Mentor | LOA::Root
+    )
 }
 
 pub fn can_write_canon(user_loa: &LOA) -> bool {

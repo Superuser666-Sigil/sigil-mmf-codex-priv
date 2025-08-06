@@ -11,7 +11,10 @@ pub fn load_module_manifest(path: &Path) -> Result<Value, Box<dyn std::error::Er
 }
 
 pub fn load_and_run_modules(ctx: &crate::session_context::SessionContext) {
-    println!("[ModuleLoader] Loading modules for session {}", ctx.session_id);
+    println!(
+        "[ModuleLoader] Loading modules for session {}",
+        ctx.session_id
+    );
 
     let modules_dir = Path::new("src/modules");
     if !modules_dir.exists() {
@@ -29,8 +32,14 @@ pub fn load_and_run_modules(ctx: &crate::session_context::SessionContext) {
                 match load_module_manifest(&manifest_path) {
                     Ok(manifest) => {
                         if let Some(module) = manifest.get("module") {
-                            let name = module.get("name").and_then(|v| v.as_str()).unwrap_or("Unknown");
-                            let version = module.get("version").and_then(|v| v.as_str()).unwrap_or("Unknown");
+                            let name = module
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("Unknown");
+                            let version = module
+                                .get("version")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("Unknown");
                             println!("[ModuleLoader] Running module: {name} (v{version})");
                         }
                     }

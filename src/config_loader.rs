@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct IRLConfig {
     pub enforcement_mode: String,
@@ -19,8 +18,6 @@ impl Default for IRLConfig {
         }
     }
 }
-
-
 
 use figment::{
     providers::{Env, Format, Serialized, Toml},

@@ -1,14 +1,14 @@
-use crate::irl_trust_evaluator::TrustEvaluator;
+use crate::audit::AuditEvent;
 use crate::irl_reward::RewardModel;
+use crate::irl_trust_evaluator::TrustEvaluator;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use crate::audit::AuditEvent;
 
 pub fn init_sigilirl() -> TrustEvaluator {
     println!("[SigilIRL] Initializing IRL subsystem...");
 
     let mut trust_evaluator = TrustEvaluator::new();
-    
+
     // In a real system, this would be loaded from the canon store
     let default_model = RewardModel::new(
         "default_reward_model",
@@ -17,7 +17,10 @@ pub fn init_sigilirl() -> TrustEvaluator {
         vec![0.5, 0.5],
     );
 
-    println!("[SigilIRL] Loading default reward model: {}", default_model.model_id);
+    println!(
+        "[SigilIRL] Loading default reward model: {}",
+        default_model.model_id
+    );
     trust_evaluator.add_model(default_model, 0.5);
 
     trust_evaluator

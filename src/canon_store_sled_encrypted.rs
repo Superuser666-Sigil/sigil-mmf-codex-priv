@@ -1,10 +1,9 @@
-
-use sled::Db;
-use crate::sigil_encrypt::{encrypt, decrypt, decode_base64_key};
 use crate::canon_store::CanonStore;
+use crate::loa::{can_read_canon, can_write_canon, LOA};
+use crate::sigil_encrypt::{decode_base64_key, decrypt, encrypt};
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
-use crate::loa::{LOA, can_read_canon, can_write_canon};
 use serde_json;
+use sled::Db;
 
 pub struct CanonStoreSled {
     db: Db,
@@ -24,38 +23,45 @@ impl CanonStore for CanonStoreSled {
         }
 
         self.db.get(key).ok().flatten().and_then(|ivec| {
-            
-    {
-        let key_opt = std::env::var("SIGIL_AES_KEY").ok().and_then(|k| decode_base64_key(&k).ok());
-        let data = if let Some(key) = key_opt {
-            decrypt(&ivec, &key).unwrap_or_else(|_| ivec.to_vec())
-        } else {
-            ivec.to_vec()
-        };
-        serde_json::from_slice::<TrustedKnowledgeEntry>(&data).ok()
-    }
-
+            let key_opt = std::env::var("SIGIL_AES_KEY")
+                .ok()
+                .and_then(|k| decode_base64_key(&k).ok());
+            let data = if let Some(key) = key_opt {
+                decrypt(&ivec, &key).unwrap_or_else(|_| ivec.to_vec())
+            } else {
+                ivec.to_vec()
+            };
+            serde_json::from_slice::<TrustedKnowledgeEntry>(&data).ok()
         })
     }
 
-    fn add_entry(&mut self, entry: TrustedKnowledgeEntry, loa: &LOA, _allow_operator_write: bool) -> Result<(), &'static str> {
+    fn add_entry(
+        &mut self,
+        entry: TrustedKnowledgeEntry,
+        loa: &LOA,
+        _allow_operator_write: bool,
+    ) -> Result<(), &'static str> {
         if !can_write_canon(loa) {
             return Err("Insufficient LOA to write canon entry");
         }
 
-        
-    let serialized = serde_json::to_vec(&entry).map_err(|_| "Serialization failed")?;
-    let encrypted = if entry.verdict == crate::trusted_knowledge::SigilVerdict::Allow {
-        if let Some(key) = std::env::var("SIGIL_AES_KEY").ok().and_then(|k| decode_base64_key(&k).ok()) {
-            encrypt(&serialized, &key).map_err(|_| "Canon encryption failed")?
+        let serialized = serde_json::to_vec(&entry).map_err(|_| "Serialization failed")?;
+        let encrypted = if entry.verdict == crate::trusted_knowledge::SigilVerdict::Allow {
+            if let Some(key) = std::env::var("SIGIL_AES_KEY")
+                .ok()
+                .and_then(|k| decode_base64_key(&k).ok())
+            {
+                encrypt(&serialized, &key).map_err(|_| "Canon encryption failed")?
+            } else {
+                serialized
+            }
         } else {
             serialized
-        }
-    } else {
-        serialized
-    };
+        };
 
-        self.db.insert(entry.id.as_str(), encrypted).map_err(|_| "Write failed")?;
+        self.db
+            .insert(entry.id.as_str(), encrypted)
+            .map_err(|_| "Write failed")?;
         Ok(())
     }
 
@@ -64,7 +70,8 @@ impl CanonStore for CanonStoreSled {
             return vec![];
         }
 
-        self.db.iter()
+        self.db
+            .iter()
             .filter_map(|item| item.ok())
             .filter_map(|(_, val)| serde_json::from_slice::<TrustedKnowledgeEntry>(&val).ok())
             .filter(|entry| category.is_none_or(|cat| entry.category == cat))

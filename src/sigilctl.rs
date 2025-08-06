@@ -1,4 +1,3 @@
-
 use std::io::{self, Write};
 
 pub fn display_status(ctx: &crate::session_context::SessionContext) {
