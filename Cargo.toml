@@ -44,7 +44,7 @@ dirs = "6.0"
 reqwest = { version = "0.12", features = ["blocking", "json"] }
 
 # File handling
-zip = { version = "4.3.0", features = ["deflate-flate2"] }
+zip = { version = "4.3", features = ["deflate"] }
 
 # Configuration
 figment = { version = "0.10", features = ["env", "toml"] }
