@@ -10,7 +10,7 @@ pub fn export_all(output_path: &str) -> Result<(), &'static str> {
 
     let file = File::create(&full_path).map_err(|_| "Failed to create export file")?;
     let mut zip = zip::ZipWriter::new(file);
-    let options: FileOptions<'_, ()> =
+    let options =
         FileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
     let targets = vec![
