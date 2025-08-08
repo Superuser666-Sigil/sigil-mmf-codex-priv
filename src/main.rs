@@ -19,7 +19,7 @@ use mmf_sigil::{
 fn main() {
     // Initialize structured logging (JSON) with env-configurable level
     // Falls back to sensible defaults without panicking if initialization fails
-    if tracing::dispatcher::has_been_set() == false {
+    if !tracing::dispatcher::has_been_set() {
         let default_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info,mmf_sigil=info".to_string());
         let subscriber = tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::new(default_filter))

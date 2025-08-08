@@ -40,7 +40,7 @@ pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) 
 
 /// Build a minimal router exposing trust endpoints, versioned alias, and health checks
 pub fn build_trust_router(runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
-    let router = Router::new()
+    Router::new()
         // current endpoints
         .route("/api/trust/check", post(check_trust))
         .route("/api/trust/status", get(trust_status))
@@ -54,9 +54,7 @@ pub fn build_trust_router(runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
         .route("/metrics", get(metrics))
-        .layer(Extension(runtime));
-
-    router
+        .layer(Extension(runtime))
 }
 
 #[axum::debug_handler]
@@ -133,7 +131,7 @@ async fn metrics() -> (axum::http::StatusCode, String) {
     let encoder = TextEncoder::new();
     let metric_families = METRICS_REGISTRY.get().unwrap().gather();
     let mut buffer = Vec::new();
-    if let Err(_) = encoder.encode(&metric_families, &mut buffer) {
+    if encoder.encode(&metric_families, &mut buffer).is_err() {
         return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, String::new());
     }
     let body = String::from_utf8(buffer).unwrap_or_default();

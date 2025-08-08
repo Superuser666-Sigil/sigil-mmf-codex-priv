@@ -3,10 +3,7 @@ use std::sync::{Arc, RwLock};
 
 /// Helper function to find a key file in secure locations
 fn find_key_file(key_id: &str) -> Option<String> {
-    match crate::key_manager::find_key_file(key_id) {
-        Some(path) => Some(path.to_string_lossy().to_string()),
-        None => None,
-    }
+    crate::key_manager::find_key_file(key_id).map(|path| path.to_string_lossy().to_string())
 }
 
 /// Top-level CLI interface for Sigil
@@ -148,7 +145,7 @@ pub fn dispatch(cli: Cli) {
         },
         Commands::Serve { host, port } => {
             // Build a minimal runtime core for serving trust endpoints
-            let addr = format!("{}:{}", host, port);
+            let addr = format!("{host}:{port}");
 
             let build_runtime = || -> Result<Arc<RwLock<crate::sigil_runtime_core::SigilRuntimeCore>>, String> {
                 use crate::canon_store_sled::CanonStoreSled;
@@ -217,8 +214,7 @@ pub fn dispatch(cli: Cli) {
                 "witness" => KeyType::WitnessSigning,
                 _ => {
                     eprintln!(
-                        "Invalid key type: {}. Must be 'license', 'canon', or 'witness'",
-                        key_type
+                        "Invalid key type: {key_type}. Must be 'license', 'canon', or 'witness'",
                     );
                     return;
                 }
@@ -227,13 +223,13 @@ pub fn dispatch(cli: Cli) {
             let mut manager = KeyManager::new();
             match manager.generate_key(&key_id, key_type_enum) {
                 Ok(key_pair) => {
-                    println!("✅ Generated key pair: {}", key_id);
+                    println!("✅ Generated key pair: {key_id}");
                     println!("Public key: {}", key_pair.public_key);
 
                     if let Some(output_path) = output {
                         match key_pair.save_to_file(&output_path) {
-                            Ok(_) => println!("💾 Key pair saved to: {}", output_path),
-                            Err(e) => eprintln!("❌ Failed to save key pair: {}", e),
+                            Ok(_) => println!("💾 Key pair saved to: {output_path}"),
+                            Err(e) => eprintln!("❌ Failed to save key pair: {e}"),
                         }
                     } else {
                         // Save to secure directory by default
@@ -245,19 +241,19 @@ pub fn dispatch(cli: Cli) {
                                         default_path.display()
                                     ),
                                     Err(e) => {
-                                        eprintln!("❌ Failed to save key pair: {}", e);
+                                        eprintln!("❌ Failed to save key pair: {e}");
                                         println!("🔑 Private key: {}", key_pair.private_key);
                                     }
                                 }
                             }
                             Err(e) => {
-                                eprintln!("❌ Failed to create secure key directory: {}", e);
+                                eprintln!("❌ Failed to create secure key directory: {e}");
                                 println!("🔑 Private key: {}", key_pair.private_key);
                             }
                         }
                     }
                 }
-                Err(e) => eprintln!("❌ Failed to generate key pair: {}", e),
+                Err(e) => eprintln!("❌ Failed to generate key pair: {e}"),
             }
         }
         Commands::Sign {
@@ -269,7 +265,7 @@ pub fn dispatch(cli: Cli) {
             let key_path = match find_key_file(&key_id) {
                 Some(path) => path,
                 None => {
-                    eprintln!("❌ Key file not found: {}.json", key_id);
+                    eprintln!("❌ Key file not found: {key_id}.json");
                     eprintln!("   Searched in: current directory and secure key directory");
                     return;
                 }
@@ -279,18 +275,18 @@ pub fn dispatch(cli: Cli) {
                 Ok(key_pair) => match key_pair.sign(data.as_bytes()) {
                     Ok(signature) => {
                         println!("✅ Data signed successfully");
-                        println!("Signature: {}", signature);
+                        println!("Signature: {signature}");
 
                         if let Some(output_path) = output {
                             match std::fs::write(&output_path, signature) {
-                                Ok(_) => println!("💾 Signature saved to: {}", output_path),
-                                Err(e) => eprintln!("❌ Failed to save signature: {}", e),
+                                Ok(_) => println!("💾 Signature saved to: {output_path}"),
+                                Err(e) => eprintln!("❌ Failed to save signature: {e}"),
                             }
                         }
                     }
-                    Err(e) => eprintln!("❌ Failed to sign data: {}", e),
+                    Err(e) => eprintln!("❌ Failed to sign data: {e}"),
                 },
-                Err(e) => eprintln!("❌ Failed to load key pair: {}", e),
+                Err(e) => eprintln!("❌ Failed to load key pair: {e}"),
             }
         }
         Commands::Verify {
@@ -302,7 +298,7 @@ pub fn dispatch(cli: Cli) {
             let key_path = match find_key_file(&key_id) {
                 Some(path) => path,
                 None => {
-                    eprintln!("❌ Key file not found: {}.json", key_id);
+                    eprintln!("❌ Key file not found: {key_id}.json");
                     eprintln!("   Searched in: current directory and secure key directory");
                     return;
                 }
@@ -317,9 +313,9 @@ pub fn dispatch(cli: Cli) {
                             println!("❌ Signature verification failed!");
                         }
                     }
-                    Err(e) => eprintln!("❌ Failed to verify signature: {}", e),
+                    Err(e) => eprintln!("❌ Failed to verify signature: {e}"),
                 },
-                Err(e) => eprintln!("❌ Failed to load key pair: {}", e),
+                Err(e) => eprintln!("❌ Failed to load key pair: {e}"),
             }
         }
     }

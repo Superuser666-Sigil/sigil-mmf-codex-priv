@@ -46,7 +46,7 @@ impl SigilKeyPair {
         let private_key_bytes = base64::engine::general_purpose::STANDARD
             .decode(&self.private_key)
             .map_err(|e| {
-                crate::errors::SigilError::auth(format!("Failed to decode private key: {}", e))
+                crate::errors::SigilError::auth(format!("Failed to decode private key: {e}"))
             })?;
 
         if private_key_bytes.len() != 32 {
@@ -69,13 +69,13 @@ impl SigilKeyPair {
         let public_key_bytes = base64::engine::general_purpose::STANDARD
             .decode(&self.public_key)
             .map_err(|e| {
-                crate::errors::SigilError::auth(format!("Failed to decode public key: {}", e))
+                crate::errors::SigilError::auth(format!("Failed to decode public key: {e}"))
             })?;
 
         let signature_bytes = base64::engine::general_purpose::STANDARD
             .decode(signature)
             .map_err(|e| {
-                crate::errors::SigilError::auth(format!("Failed to decode signature: {}", e))
+                crate::errors::SigilError::auth(format!("Failed to decode signature: {e}"))
             })?;
 
         if public_key_bytes.len() != 32 {
@@ -88,10 +88,10 @@ impl SigilKeyPair {
         key_array.copy_from_slice(&public_key_bytes);
 
         let verifying_key = VerifyingKey::from_bytes(&key_array)
-            .map_err(|e| crate::errors::SigilError::auth(format!("Invalid public key: {}", e)))?;
+            .map_err(|e| crate::errors::SigilError::auth(format!("Invalid public key: {e}")))?;
 
         let signature = Signature::try_from(&signature_bytes[..])
-            .map_err(|e| crate::errors::SigilError::auth(format!("Invalid signature: {}", e)))?;
+            .map_err(|e| crate::errors::SigilError::auth(format!("Invalid signature: {e}")))?;
 
         Ok(verifying_key.verify(data, &signature).is_ok())
     }
@@ -103,7 +103,7 @@ impl SigilKeyPair {
         })?;
 
         fs::write(path, json).map_err(|e| {
-            crate::errors::SigilError::auth(format!("Failed to write key file: {}", e))
+            crate::errors::SigilError::auth(format!("Failed to write key file: {e}"))
         })?;
 
         Ok(())
@@ -112,7 +112,7 @@ impl SigilKeyPair {
     /// Load a key pair from a file
     pub fn load_from_file(path: &str) -> SigilResult<Self> {
         let content = fs::read_to_string(path).map_err(|e| {
-            crate::errors::SigilError::auth(format!("Failed to read key file: {}", e))
+            crate::errors::SigilError::auth(format!("Failed to read key file: {e}"))
         })?;
 
         let key_pair: SigilKeyPair = serde_json::from_str(&content).map_err(|e| {
@@ -152,7 +152,7 @@ impl KeyManager {
         let key_pair = self
             .keys
             .get(key_id)
-            .ok_or_else(|| crate::errors::SigilError::auth(format!("Key not found: {}", key_id)))?;
+            .ok_or_else(|| crate::errors::SigilError::auth(format!("Key not found: {key_id}")))?;
 
         key_pair.sign(data)
     }
@@ -162,9 +162,15 @@ impl KeyManager {
         let key_pair = self
             .keys
             .get(key_id)
-            .ok_or_else(|| crate::errors::SigilError::auth(format!("Key not found: {}", key_id)))?;
+            .ok_or_else(|| crate::errors::SigilError::auth(format!("Key not found: {key_id}")))?;
 
         key_pair.verify(data, signature)
+    }
+}
+
+impl Default for KeyManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -213,14 +219,14 @@ pub fn ensure_secure_key_dir() -> SigilResult<PathBuf> {
 /// Find a key file in secure locations
 pub fn find_key_file(key_id: &str) -> Option<PathBuf> {
     // First check current directory
-    let current_path = PathBuf::from(format!("{}.json", key_id));
+    let current_path = PathBuf::from(format!("{key_id}.json"));
     if current_path.exists() {
         return Some(current_path);
     }
 
     // Then check secure key directory
     if let Ok(mut secure_path) = get_secure_key_dir() {
-        secure_path.push(format!("{}.json", key_id));
+        secure_path.push(format!("{key_id}.json"));
         if secure_path.exists() {
             return Some(secure_path);
         }
@@ -233,7 +239,7 @@ pub fn find_key_file(key_id: &str) -> Option<PathBuf> {
 pub fn get_default_key_path(key_id: &str) -> SigilResult<PathBuf> {
     let key_dir = ensure_secure_key_dir()?;
     let mut key_path = key_dir;
-    key_path.push(format!("{}.json", key_id));
+    key_path.push(format!("{key_id}.json"));
     Ok(key_path)
 }
 

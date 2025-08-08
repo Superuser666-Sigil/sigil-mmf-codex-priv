@@ -114,7 +114,7 @@ fn generate_training_data(device: &Device) -> Result<(Tensor, Tensor)> {
 
 /// Load teacher model outputs from ONNX file
 fn load_teacher_outputs(path: &str, device: &Device) -> Result<Tensor> {
-    println!("Loading teacher outputs from: {}", path);
+    println!("Loading teacher outputs from: {path}");
 
     // For now, we'll generate synthetic teacher outputs
     // In a real implementation, this would load from ONNX and run inference
@@ -202,8 +202,7 @@ fn train_unified(
         let total_loss_value = total_loss.to_scalar::<f32>()?;
 
         println!(
-            "Epoch {}/10, Task Loss: {:.6}, Distillation Loss: {:.6}, Total Loss: {:.6}",
-            epoch, task_loss_value, distillation_loss_value, total_loss_value
+            "Epoch {epoch}/10, Task Loss: {task_loss_value:.6}, Distillation Loss: {distillation_loss_value:.6}, Total Loss: {total_loss_value:.6}"
         );
     }
     println!("Unified training complete.");
@@ -266,8 +265,7 @@ fn train_relational(
         let total_loss_value = total_loss.to_scalar::<f32>()?;
 
         println!(
-            "Epoch {}/10, Task Loss: {:.6}, Distillation Loss: {:.6}, Total Loss: {:.6}",
-            epoch, task_loss_value, distillation_loss_value, total_loss_value
+            "Epoch {epoch}/10, Task Loss: {task_loss_value:.6}, Distillation Loss: {distillation_loss_value:.6}, Total Loss: {total_loss_value:.6}"
         );
     }
     println!("Relational training complete.");
@@ -281,7 +279,7 @@ fn save_model(_model: &impl Module, path: &str) -> Result<()> {
     // Note: Candle doesn't have a direct save method on Module trait
     // This is a placeholder - in practice you'd save the VarMap
     var_map.save(path)?;
-    println!("Model saved to: {}", path);
+    println!("Model saved to: {path}");
     Ok(())
 }
 
@@ -291,7 +289,7 @@ fn handle_model_output(
     output_path: Option<&String>,
     model_type: &str,
 ) -> Result<()> {
-    let default_path = format!("./models/{}_model.safetensors", model_type);
+    let default_path = format!("./models/{model_type}_model.safetensors");
     let path = output_path.unwrap_or(&default_path);
 
     // Ensure directory exists
@@ -316,7 +314,7 @@ fn main() -> Result<()> {
 
     // Initialize device
     let device = Device::Cpu;
-    println!("Using device: {:?}", device);
+    println!("Using device: {device:?}");
     println!("Knowledge distillation settings:");
     println!("  Temperature: {}", args.temperature);
     println!("  Alpha (task vs distillation): {}", args.alpha);
