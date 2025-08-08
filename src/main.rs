@@ -101,7 +101,9 @@ Sigil Runtime
         }
         LOA::Operator => {
             info!(message = "Operator session active");
-            module_loader::load_and_run_modules(&context);
+            if let Err(e) = module_loader::load_and_run_modules(&context) {
+                warn!(message = "Module loading failed", error = %e);
+            }
         }
         LOA::Observer => {
             info!(message = "Observer mode: read-only diagnostics");
