@@ -7,6 +7,8 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use prometheus::{Encoder, TextEncoder, Registry, IntCounter};
+use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
@@ -51,6 +53,7 @@ pub fn build_trust_router(runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
         // health endpoints
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
+        .route("/metrics", get(metrics))
         .layer(Extension(runtime));
 
     router
@@ -61,6 +64,11 @@ async fn check_trust(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
     Json(req): Json<TrustCheckRequest>,
 ) -> Json<TrustCheckResponse> {
+    // increment metric
+    init_metrics();
+    if let Some(counter) = TRUST_CHECK_TOTAL.get() {
+        counter.inc();
+    }
     let runtime = runtime.read().unwrap();
     let loa = LOA::from_str(&req.loa).unwrap_or(LOA::Guest);
     let event = AuditEvent::new(
@@ -108,4 +116,26 @@ async fn readyz(Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>) ->
     let runtime = runtime.read().unwrap();
     let ready = runtime.active_model_id.is_some();
     Json(serde_json::json!({ "ready": ready }))
+}
+
+// Simple Prometheus metrics endpoint using a global registry
+static METRICS_REGISTRY: OnceLock<Registry> = OnceLock::new();
+static TRUST_CHECK_TOTAL: OnceLock<IntCounter> = OnceLock::new();
+
+fn init_metrics() {
+    let registry = METRICS_REGISTRY.get_or_init(Registry::new);
+    let counter = TRUST_CHECK_TOTAL.get_or_init(|| IntCounter::new("trust_check_total", "Total trust check requests").expect("counter"));
+    let _ = registry.register(Box::new(counter.clone()));
+}
+
+async fn metrics() -> (axum::http::StatusCode, String) {
+    init_metrics();
+    let encoder = TextEncoder::new();
+    let metric_families = METRICS_REGISTRY.get().unwrap().gather();
+    let mut buffer = Vec::new();
+    if let Err(_) = encoder.encode(&metric_families, &mut buffer) {
+        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, String::new());
+    }
+    let body = String::from_utf8(buffer).unwrap_or_default();
+    (axum::http::StatusCode::OK, body)
 }

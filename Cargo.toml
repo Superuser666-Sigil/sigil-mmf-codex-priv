@@ -63,5 +63,8 @@ candle-transformers = "0.9.1"
 # ONNX support
 tract-onnx = "0.21.10"
 
+# Observability
+prometheus = "0.13"
+
 [dev-dependencies]
 tempfile = "3.0"
