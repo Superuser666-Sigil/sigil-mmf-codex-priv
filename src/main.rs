@@ -2,6 +2,8 @@
 // Bootstrap runner compliant with Codex Rule Zero, Canon LOA policies, and IRL trace audit
 
 use clap::Parser;
+use tracing::{error, info, warn};
+use tracing_subscriber::EnvFilter;
 use mmf_sigil::{
     audit::{AuditEvent, LogLevel},
     audit_verifier,
@@ -15,6 +17,22 @@ use mmf_sigil::{
 };
 
 fn main() {
+    // Initialize structured logging (JSON) with env-configurable level
+    // Falls back to sensible defaults without panicking if initialization fails
+    if tracing::dispatcher::has_been_set() == false {
+        let default_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info,mmf_sigil=info".to_string());
+        let subscriber = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new(default_filter))
+            .json()
+            .with_current_span(true)
+            .with_target(true)
+            .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
+            .flatten_event(true)
+            .finish();
+        if let Err(e) = tracing::dispatcher::set_global_default(subscriber) {
+            eprintln!("Failed to initialize tracing subscriber: {e}");
+        }
+    }
     let banner = r#"
 ███████╗██╗ ██████╗ ██╗██╗     
 ██╔════╝██║██╔════╝ ██║██║     
@@ -34,7 +52,7 @@ Sigil Runtime
         return;
     }
 
-    println!("{banner}");
+    info!(message = "Sigil Runtime starting", banner = %banner);
 
     // Load config
     let config_data = load_config();
@@ -51,42 +69,46 @@ Sigil Runtime
 
     let loa = match license_result {
         Ok(validated) if validated.valid => {
-            println!("✅ License validated: {}", validated.license.owner.name);
+            info!(
+                message = "License validated",
+                owner = %validated.license.owner.name
+            );
             validated.license.loa
         }
         Ok(invalid) => {
-            eprintln!("⚠️ License rejected: {}", invalid.message);
+            warn!(message = "License rejected", reason = %invalid.message);
             LOA::Guest
         }
         Err(e) => {
-            eprintln!("❌ Failed to parse license: {e}");
+            error!(message = "Failed to parse license", error = %e);
             LOA::Guest
         }
     };
 
     // Construct runtime session
     let context = SessionContext::new("main_session", loa);
-    println!(
-        "🔐 Session Started: {} (LOA: {:?})",
-        context.session_id, context.loa
+    info!(
+        message = "Session started",
+        session_id = %context.session_id,
+        loa = ?context.loa
     );
 
     // Trust-level branch: Observer vs Operator vs Root
     match context.loa {
         LOA::Root => {
-            println!("🚨 Elevated session running under LOA::Root");
+            warn!(message = "Elevated session running under LOA::Root");
             sigilctl::run_root_shell(&context);
         }
         LOA::Operator => {
-            println!("🔧 Operator session active.");
+            info!(message = "Operator session active");
             module_loader::load_and_run_modules(&context);
         }
         LOA::Observer => {
-            println!("👀 Observer mode: read-only diagnostics");
+            info!(message = "Observer mode: read-only diagnostics");
             audit_verifier::run_observer_tools(&context);
         }
         _ => {
-            println!("👤 Guest or Mentor session active.");
+            info!(message = "Guest or Mentor session active");
         }
     }
 
@@ -102,6 +124,6 @@ Sigil Runtime
     .with_context("Session bootstrap complete");
 
     if let Err(e) = audit.write_to_log() {
-        eprintln!("⚠️ Failed to write audit log: {e}");
+        warn!(message = "Failed to write audit log", error = %e);
     }
 }
