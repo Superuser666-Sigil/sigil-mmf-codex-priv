@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # -------- Builder stage --------
-FROM rust:1.78-slim AS builder
+FROM rustlang/rust:nightly-slim AS builder
 
 ARG CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 ENV CARGO_TERM_COLOR=always \
@@ -43,7 +43,7 @@ USER appuser
 
 EXPOSE 8080
 
-# Default: run API server
-CMD ["/app/mmf_sigil", "--", "serve", "--host", "0.0.0.0", "--port", "8080"]
+# Default: run API server (no `--` between bin and subcommand)
+CMD ["/app/mmf_sigil", "serve", "--host", "0.0.0.0", "--port", "8080"]
 
 

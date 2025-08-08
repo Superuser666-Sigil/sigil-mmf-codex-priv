@@ -1,7 +1,7 @@
 [package]
 name = "mmf_sigil"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "mmf_sigil"
@@ -40,8 +40,8 @@ getrandom = "0.3"
 # Cross-platform utilities
 dirs = "6.0"
 
-# HTTP client
-reqwest = { version = "0.12", features = ["blocking", "json"] }
+# HTTP client (avoid OpenSSL by using rustls)
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 # File handling
 zip = { version = "4.3", features = ["deflate"] }
