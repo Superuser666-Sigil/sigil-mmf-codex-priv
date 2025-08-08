@@ -29,7 +29,7 @@ fn main() {
             .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
             .flatten_event(true)
             .finish();
-        if let Err(e) = tracing::dispatcher::set_global_default(subscriber) {
+        if let Err(e) = tracing::dispatcher::set_global_default(subscriber.into()) {
             eprintln!("Failed to initialize tracing subscriber: {e}");
         }
     }
