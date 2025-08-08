@@ -1,0 +1,24 @@
+# Git
+.git
+.gitignore
+
+# Cargo build artifacts
+/target
+
+# Local data and logs
+/data
+/logs
+
+# OS/editor
+.DS_Store
+*.swp
+*.swo
+*.log
+
+# Node/npm caches
+node_modules
+npm-debug.log
+
+# Python caches
+__pycache__
+*.pyc
