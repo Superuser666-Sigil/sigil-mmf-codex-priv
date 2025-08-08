@@ -10,8 +10,7 @@ pub fn export_all(output_path: &str) -> Result<(), &'static str> {
 
     let file = File::create(&full_path).map_err(|_| "Failed to create export file")?;
     let mut zip = zip::ZipWriter::new(file);
-    let options =
-        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    // Build file options per entry to avoid move semantics
 
     let targets = vec![
         ("data/vault.json", "vault.json"),
@@ -26,6 +25,8 @@ pub fn export_all(output_path: &str) -> Result<(), &'static str> {
             File::open(path)
                 .and_then(|mut f| f.read_to_end(&mut buffer))
                 .map_err(|_| "Read failed")?;
+            let options: zip::write::FileOptions<'_, zip::write::ExtendedFileOptions> =
+                FileOptions::default().compression_method(zip::CompressionMethod::Stored);
             zip.start_file(dest, options)
                 .map_err(|_| "Zip start failed")?;
             zip.write_all(&buffer).map_err(|_| "Zip write failed")?;
@@ -39,6 +40,8 @@ pub fn export_all(output_path: &str) -> Result<(), &'static str> {
                         .and_then(|mut f| f.read_to_end(&mut buffer))
                         .map_err(|_| "Canon read fail")?;
                     let filename = file_path.file_name().unwrap().to_string_lossy();
+                    let options: zip::write::FileOptions<'_, zip::write::ExtendedFileOptions> =
+                        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
                     zip.start_file(format!("canon/{filename}"), options)
                         .map_err(|_| "Canon zip fail")?;
                     zip.write_all(&buffer).map_err(|_| "Canon zip write fail")?;
