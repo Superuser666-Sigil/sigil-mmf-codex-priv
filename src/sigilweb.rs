@@ -36,6 +36,26 @@ pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) 
         .layer(Extension(runtime))
 }
 
+/// Build a minimal router exposing trust endpoints, versioned alias, and health checks
+pub fn build_trust_router(runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
+    let router = Router::new()
+        // current endpoints
+        .route("/api/trust/check", post(check_trust))
+        .route("/api/trust/status", get(trust_status))
+        // versioned aliases
+        .route("/v1/trust/check", post(check_trust))
+        .route("/v1/trust/status", get(trust_status))
+        // backward-compatible aliases used by some tests
+        .route("/trust/check", post(check_trust))
+        .route("/trust/status", get(trust_status))
+        // health endpoints
+        .route("/healthz", get(healthz))
+        .route("/readyz", get(readyz))
+        .layer(Extension(runtime));
+
+    router
+}
+
 #[axum::debug_handler]
 async fn check_trust(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
@@ -78,4 +98,14 @@ async fn trust_status(
 ) -> Json<serde_json::Value> {
     let runtime = runtime.read().unwrap();
     Json(runtime.status())
+}
+
+async fn healthz() -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "status": "ok" }))
+}
+
+async fn readyz(Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>) -> Json<serde_json::Value> {
+    let runtime = runtime.read().unwrap();
+    let ready = runtime.active_model_id.is_some();
+    Json(serde_json::json!({ "ready": ready }))
 }
