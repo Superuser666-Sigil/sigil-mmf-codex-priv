@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use std::sync::{Arc, RwLock};
 
 /// Helper function to find a key file in secure locations
 fn find_key_file(key_id: &str) -> Option<String> {
@@ -62,6 +63,16 @@ pub enum Commands {
 
     /// Display current LOA identity
     Whoami,
+
+    /// Serve the HTTP API (trust routes, health, versioned endpoints)
+    Serve {
+        /// Host/IP to bind
+        #[arg(long, default_value = "0.0.0.0")]
+        host: String,
+        /// Port to bind
+        #[arg(long, default_value_t = 8080)]
+        port: u16,
+    },
 
     /// Generate a new cryptographic key pair
     GenerateKey {
@@ -135,6 +146,64 @@ pub fn dispatch(cli: Cli) {
             Ok(loa) => println!("You are operating as {loa:?}"),
             Err(e) => eprintln!("LOA detection failed: {e}"),
         },
+        Commands::Serve { host, port } => {
+            // Build a minimal runtime core for serving trust endpoints
+            let addr = format!("{}:{}", host, port);
+
+            let build_runtime = || -> Result<Arc<RwLock<crate::sigil_runtime_core::SigilRuntimeCore>>, String> {
+                use crate::canon_store_sled::CanonStoreSled;
+                use crate::irl_modes::IRLConfig as RuntimeIRLConfig;
+                use crate::loa::LOA;
+                use crate::sigil_runtime_core::SigilRuntimeCore;
+                use std::sync::Mutex;
+
+                let store = CanonStoreSled::new("data/canon_store")
+                    .map_err(|e| format!("Failed to create canon store: {e}"))?;
+                let canon_store = Arc::new(Mutex::new(store));
+
+                let runtime = SigilRuntimeCore::new(LOA::Observer, canon_store, RuntimeIRLConfig::default())
+                    .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
+
+                Ok(Arc::new(RwLock::new(runtime)))
+            };
+
+            let runtime = match build_runtime() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("Failed to initialize server runtime: {e}");
+                    return;
+                }
+            };
+
+            let app = crate::sigilweb::build_trust_router(runtime);
+
+            let rt = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("Failed to build Tokio runtime: {e}");
+                    return;
+                }
+            };
+
+            rt.block_on(async move {
+                let socket_addr: std::net::SocketAddr = match addr.parse() {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("Invalid bind address {addr}: {e}");
+                        return;
+                    }
+                };
+                match tokio::net::TcpListener::bind(socket_addr).await {
+                    Ok(listener) => {
+                        println!("HTTP server listening on http://{addr}");
+                        if let Err(e) = axum::serve(listener, app).await {
+                            eprintln!("Server error: {e}");
+                        }
+                    }
+                    Err(e) => eprintln!("Failed to bind {addr}: {e}"),
+                }
+            });
+        }
         Commands::GenerateKey {
             key_id,
             key_type,
