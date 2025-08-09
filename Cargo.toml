@@ -2,6 +2,8 @@
 name = "mmf_sigil"
 version = "0.1.0"
 edition = "2024"
+license = "MIT OR Apache-2.0"
+resolver = "2"
 
 [[bin]]
 name = "mmf_sigil"
@@ -13,35 +15,35 @@ path = "src/bin/trainer.rs"
 
 [dependencies]
 # Core dependencies
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
-tokio = { version = "1.0", features = ["full"] }
-axum = { version = "0.8", features = ["macros"] }
-tower = "0.5"
-tower-http = { version = "0.6", features = ["cors"] }
-tracing = "0.1"
+serde = { version = "=1.0.219", features = ["derive"] }
+serde_json = "=1.0.142"
+chrono = { version = "0.4", features = ["serde"] } # Not in critical list
+tokio = { version = "=1.47.1", default-features = false, features = ["rt-multi-thread", "macros", "time"] }
+axum = { version = "=0.8.4", default-features = false, features = ["macros", "json", "http1", "http2", "tokio"] }
+tower = { version = "=0.5.2", default-features = false }
+tower-http = { version = "=0.6.6", default-features = false, features = ["cors"] }
+tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json", "time"] }
 anyhow = "1.0"
 thiserror = "2.0"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 base64 = "0.22"
-sha2 = "0.10"
-ed25519-dalek = { version = "2.0", features = ["rand_core"] }
+sha2 = "=0.10.9"
+ed25519-dalek = { version = "=2.2.0", features = ["rand_core"] }
 sled = "0.34"
 toml = "0.9"
 clap = { version = "4.0", features = ["derive"] }
 
 # Cryptographic dependencies
-aes-gcm = "0.10"
+aes-gcm = "=0.10.3"
 rand = "0.8"
-getrandom = "0.3"
+getrandom = "=0.3.3"
 
 # Cross-platform utilities
 dirs = "6.0"
 
 # HTTP client (avoid OpenSSL by using rustls)
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "=0.12.22", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 # File handling
 zip = { version = "4.3", features = ["deflate"] }
@@ -56,15 +58,15 @@ log = "0.4"
 lazy_static = "1.4"
 
 # Candle ML framework (replacing Burn)
-candle-core = "0.9.1"
-candle-nn = "0.9.1"
-candle-transformers = "0.9.1"
+candle-core = "=0.9.1"
+candle-nn = "=0.9.1"
+candle-transformers = "=0.9.1"
 
 # ONNX support
-tract-onnx = "0.21.10"
+tract-onnx = "=0.21.10"
 
 # Observability
-prometheus = "0.13"
+prometheus = "=0.14.0"
 
 [dev-dependencies]
 tempfile = "3.0"
