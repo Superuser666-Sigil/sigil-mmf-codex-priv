@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::loa::LOA;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultMemoryBlock {

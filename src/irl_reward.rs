@@ -20,7 +20,12 @@ pub struct RewardModel {
 }
 
 impl RewardModel {
-    pub fn new(model_id: &str, description: Option<String>, features: Vec<String>, weights: Vec<f32>) -> Self {
+    pub fn new(
+        model_id: &str,
+        description: Option<String>,
+        features: Vec<String>,
+        weights: Vec<f32>,
+    ) -> Self {
         RewardModel {
             model_id: model_id.to_string(),
             description,

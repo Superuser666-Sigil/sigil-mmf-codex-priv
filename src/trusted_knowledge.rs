@@ -1,4 +1,3 @@
-
 use crate::loa::LOA;
 use serde::{Deserialize, Serialize};
 
@@ -12,18 +11,16 @@ pub enum SigilVerdict {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TrustedKnowledgeEntry {
-    pub id: String,                  // Canonical UUID or key
-    pub loa_required: LOA,          // Trust level needed to access
-    pub verdict: SigilVerdict,      // Result if access is attempted
-    pub category: String,           // 'spell', 'gear', 'metatype', etc.
-    pub content: String,            // Canonical text or payload
+    pub id: String,            // Canonical UUID or key
+    pub loa_required: LOA,     // Trust level needed to access
+    pub verdict: SigilVerdict, // Result if access is attempted
+    pub category: String,      // 'spell', 'gear', 'metatype', etc.
+    pub content: String,       // Canonical text or payload
 }
 
 impl TrustedKnowledgeEntry {
     pub fn is_valid(&self) -> bool {
-        !self.id.is_empty()
-            && !self.category.is_empty()
-            && !self.content.is_empty()
+        !self.id.is_empty() && !self.category.is_empty() && !self.content.is_empty()
     }
 
     pub fn access_verdict(&self, loa: &LOA) -> SigilVerdict {

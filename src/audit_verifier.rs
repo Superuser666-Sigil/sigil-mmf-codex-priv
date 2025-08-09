@@ -1,5 +1,4 @@
-
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -28,8 +27,11 @@ pub fn verify_audit_log(path: &str) -> Result<(), String> {
 }
 
 pub fn run_observer_tools(ctx: &crate::session_context::SessionContext) {
-    println!("[ObserverTools] Audit and verification tools active for session {}", ctx.session_id);
-    
+    println!(
+        "[ObserverTools] Audit and verification tools active for session {}",
+        ctx.session_id
+    );
+
     let log_path = "logs/audit_access_log.jsonl";
     println!("[ObserverTools] Displaying audit log: {log_path}");
 

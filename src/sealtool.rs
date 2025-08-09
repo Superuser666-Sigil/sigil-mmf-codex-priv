@@ -1,9 +1,8 @@
-
-use sha2::{Sha256, Digest};
+use crate::trusted_knowledge::TrustedKnowledgeEntry;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::Read;
-use crate::trusted_knowledge::TrustedKnowledgeEntry;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SealedCanonEntry {
@@ -14,7 +13,8 @@ pub struct SealedCanonEntry {
 pub fn seal_file(path: &str, out_path: &str) -> Result<(), &'static str> {
     let mut file = File::open(path).map_err(|_| "Cannot open canon file")?;
     let mut content = String::new();
-    file.read_to_string(&mut content).map_err(|_| "Read error")?;
+    file.read_to_string(&mut content)
+        .map_err(|_| "Read error")?;
 
     let entry: TrustedKnowledgeEntry = serde_json::from_str(&content).map_err(|_| "Parse error")?;
     let hash = Sha256::digest(content.as_bytes());

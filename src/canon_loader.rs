@@ -33,22 +33,25 @@ impl CanonNode {
             codex_commentary: serde_json::Value::Null,
         }
     }
-    
+
     pub fn from_json(json: &serde_json::Value) -> Result<Self, String> {
-        let id = json.get("id")
+        let id = json
+            .get("id")
             .and_then(|id| id.as_str())
             .ok_or("Missing 'id' field")?;
-            
-        let title = json.get("name")
+
+        let title = json
+            .get("name")
             .and_then(|name| name.as_str())
             .unwrap_or("Untitled");
-            
-        let trust_level = json.get("trust_level")
+
+        let trust_level = json
+            .get("trust_level")
             .and_then(|tl| tl.as_str())
             .unwrap_or("unverified");
-            
+
         let mut node = CanonNode::new(id, title, trust_level);
-        
+
         // Parse flags if present
         if let Some(flags) = json.get("flags") {
             if let Some(flags_array) = flags.as_array() {
@@ -59,7 +62,7 @@ impl CanonNode {
                 }
             }
         }
-        
+
         // Parse tags if present
         if let Some(tags) = json.get("tags") {
             if let Some(tags_array) = tags.as_array() {
@@ -70,7 +73,7 @@ impl CanonNode {
                 }
             }
         }
-        
+
         Ok(node)
     }
 }
@@ -90,7 +93,8 @@ pub fn load_from_jsonl(dir: &Path) -> Result<Vec<CanonNode>, String> {
                 let line = line.map_err(|e| e.to_string())?;
                 let node: CanonNode = serde_json::from_str(&line).map_err(|e| e.to_string())?;
 
-                let mut chain = ReasoningChain::new(format!("canon_load:{}", node.id), LoaLevel::Root);
+                let mut chain =
+                    ReasoningChain::new(format!("canon_load:{}", node.id), LoaLevel::Root);
                 chain.set_verdict(Verdict::Allow);
                 chain.set_irl_score(1.0, true);
                 chain.set_scope(ModuleScope {
@@ -130,12 +134,12 @@ pub fn load_from_jsonl(dir: &Path) -> Result<Vec<CanonNode>, String> {
 pub fn load_canon_entries(file: &str) -> Result<Vec<CanonNode>, String> {
     let content = std::fs::read_to_string(file)
         .map_err(|e| format!("Failed to read canon file '{file}': {e}"))?;
-    
+
     let json: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse canon JSON from '{file}': {e}"))?;
-    
+
     let mut nodes = Vec::new();
-    
+
     if let Some(entries) = json.get("entries") {
         if let Some(entries_array) = entries.as_array() {
             for entry in entries_array {
@@ -147,7 +151,7 @@ pub fn load_canon_entries(file: &str) -> Result<Vec<CanonNode>, String> {
             }
         }
     }
-    
+
     println!("Loaded {} canon entries from '{}'", nodes.len(), file);
     Ok(nodes)
 }

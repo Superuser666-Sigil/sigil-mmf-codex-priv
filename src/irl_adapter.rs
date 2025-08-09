@@ -26,7 +26,7 @@ pub fn query_phi4_executor(context: &str, input: &str) -> Result<IRLResponse, Bo
     });
 
     let res = client
-        .post("http://localhost:11434/irl")  // ← Change if your Phi-4 endpoint is different
+        .post("http://localhost:11434/irl") // ← Change if your Phi-4 endpoint is different
         .header("Content-Type", "application/json")
         .body(serde_json::to_string(&payload).unwrap())
         .send()?;

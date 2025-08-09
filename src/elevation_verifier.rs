@@ -1,1 +1,3 @@
-pub fn validate_elevation(_: &str) -> bool { true }
+pub fn validate_elevation(_: &str) -> bool {
+    true
+}

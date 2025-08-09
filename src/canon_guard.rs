@@ -1,4 +1,4 @@
-use crate::audit_chain::{ReasoningChain, FrozenChain, Verdict};
+use crate::audit_chain::{FrozenChain, ReasoningChain, Verdict};
 use crate::audit_store::AuditStore;
 use crate::sigil_integrity::validate_witnesses;
 
@@ -71,22 +71,27 @@ fn extract_verdict_from_frozen_chain(chain: &FrozenChain) -> Result<Verdict, Str
     // For now, we'll look at the reasoning steps to determine the verdict
     // This is a simplified implementation - in practice, you'd want to store
     // the verdict explicitly in the FrozenChain structure
-    
-    let reasoning_text = &chain.reasoning_trace.reasoning_steps
+
+    let reasoning_text = &chain
+        .reasoning_trace
+        .reasoning_steps
         .iter()
         .map(|step| step.logic.clone())
         .collect::<Vec<_>>()
         .join("\n");
 
     // Simple heuristic: look for keywords in the reasoning
-    if reasoning_text.to_lowercase().contains("allow") || 
-       reasoning_text.to_lowercase().contains("permit") {
+    if reasoning_text.to_lowercase().contains("allow")
+        || reasoning_text.to_lowercase().contains("permit")
+    {
         Ok(Verdict::Allow)
-    } else if reasoning_text.to_lowercase().contains("deny") || 
-              reasoning_text.to_lowercase().contains("reject") {
+    } else if reasoning_text.to_lowercase().contains("deny")
+        || reasoning_text.to_lowercase().contains("reject")
+    {
         Ok(Verdict::Deny)
-    } else if reasoning_text.to_lowercase().contains("defer") || 
-              reasoning_text.to_lowercase().contains("postpone") {
+    } else if reasoning_text.to_lowercase().contains("defer")
+        || reasoning_text.to_lowercase().contains("postpone")
+    {
         Ok(Verdict::Defer)
     } else {
         Ok(Verdict::ManualReview)
@@ -95,9 +100,17 @@ fn extract_verdict_from_frozen_chain(chain: &FrozenChain) -> Result<Verdict, Str
 
 /// Validate witnesses for a FrozenChain
 fn validate_frozen_chain_witnesses(chain: &FrozenChain, payload: &str) -> Result<bool, String> {
-    let witnesses: Vec<crate::sigil_integrity::WitnessSignature> = chain.witnesses.iter().map(|w| crate::sigil_integrity::WitnessSignature {
-        witness_id: w.witness_id.clone(),
-        signature: w.signature.clone(),
-    }).collect();
-    Ok(validate_witnesses(&witnesses, &crate::loa::LOA::Root, payload))
+    let witnesses: Vec<crate::sigil_integrity::WitnessSignature> = chain
+        .witnesses
+        .iter()
+        .map(|w| crate::sigil_integrity::WitnessSignature {
+            witness_id: w.witness_id.clone(),
+            signature: w.signature.clone(),
+        })
+        .collect();
+    Ok(validate_witnesses(
+        &witnesses,
+        &crate::loa::LOA::Root,
+        payload,
+    ))
 }

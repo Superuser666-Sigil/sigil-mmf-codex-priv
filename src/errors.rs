@@ -1,13 +1,13 @@
 //! Comprehensive error handling for the Sigil Runtime
-//! 
+//!
 //! This module provides structured error types following Rust best practices
 //! as outlined in The Rust Book Chapter 9 on Error Handling.
 
-use thiserror::Error;
 use crate::loa::LOA;
+use thiserror::Error;
 
 /// Main error type for the Sigil Runtime system
-/// 
+///
 /// Following The Rust Book's guidance on custom error types,
 /// this enum covers all major error categories in the system.
 #[derive(Error, Debug)]
@@ -16,10 +16,10 @@ pub enum SigilError {
     Config { message: String },
 
     #[error("Database operation failed: {operation} - {source}")]
-    Database { 
+    Database {
         operation: String,
         #[source]
-        source: Box<dyn std::error::Error + Send + Sync>
+        source: Box<dyn std::error::Error + Send + Sync>,
     },
 
     #[error("Serialization failed: {context}")]
@@ -78,7 +78,7 @@ pub enum SigilError {
 }
 
 /// Type alias for Result with SigilError
-/// 
+///
 /// As recommended in The Rust Book, this provides a convenient
 /// shorthand for Result types throughout the codebase.
 pub type SigilResult<T> = Result<T, SigilError>;
@@ -86,11 +86,16 @@ pub type SigilResult<T> = Result<T, SigilError>;
 impl SigilError {
     /// Create a configuration error
     pub fn config(message: impl Into<String>) -> Self {
-        Self::Config { message: message.into() }
+        Self::Config {
+            message: message.into(),
+        }
     }
 
     /// Create a database error
-    pub fn database(operation: impl Into<String>, source: impl std::error::Error + Send + Sync + 'static) -> Self {
+    pub fn database(
+        operation: impl Into<String>,
+        source: impl std::error::Error + Send + Sync + 'static,
+    ) -> Self {
         Self::Database {
             operation: operation.into(),
             source: Box::new(source),
@@ -107,12 +112,16 @@ impl SigilError {
 
     /// Create an authentication error
     pub fn auth(message: impl Into<String>) -> Self {
-        Self::Auth { message: message.into() }
+        Self::Auth {
+            message: message.into(),
+        }
     }
 
     /// Create an IRL error
     pub fn irl(message: impl Into<String>) -> Self {
-        Self::Irl { message: message.into() }
+        Self::Irl {
+            message: message.into(),
+        }
     }
 
     /// Create a canon operation error
@@ -125,7 +134,9 @@ impl SigilError {
 
     /// Create an encryption error
     pub fn encryption(operation: impl Into<String>) -> Self {
-        Self::Encryption { operation: operation.into() }
+        Self::Encryption {
+            operation: operation.into(),
+        }
     }
 
     /// Create an I/O error
@@ -138,12 +149,16 @@ impl SigilError {
 
     /// Create a license validation error
     pub fn license(reason: impl Into<String>) -> Self {
-        Self::License { reason: reason.into() }
+        Self::License {
+            reason: reason.into(),
+        }
     }
 
     /// Create an audit error
     pub fn audit(operation: impl Into<String>) -> Self {
-        Self::Audit { operation: operation.into() }
+        Self::Audit {
+            operation: operation.into(),
+        }
     }
 
     /// Create an extension error
@@ -172,12 +187,14 @@ impl SigilError {
 
     /// Create an internal error
     pub fn internal(message: impl Into<String>) -> Self {
-        Self::Internal { message: message.into() }
+        Self::Internal {
+            message: message.into(),
+        }
     }
 }
 
 /// Helper trait for safe mutex operations
-/// 
+///
 /// Following The Rust Book's patterns for extending existing types,
 /// this trait provides safer mutex operations that return proper errors
 /// instead of panicking.
@@ -269,10 +286,10 @@ mod tests {
     #[test]
     fn test_error_chaining() {
         use std::error::Error;
-        
+
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "File not found");
         let sigil_err = SigilError::io("reading config", io_err);
-        
+
         assert!(sigil_err.source().is_some());
         assert!(sigil_err.to_string().contains("I/O operation failed"));
     }

@@ -18,17 +18,22 @@ impl LogEvent {
         }
     }
 
-    pub fn new_with_context(level: &str, message: &str, context: Option<&str>, category: Option<&str>) -> Self {
+    pub fn new_with_context(
+        level: &str,
+        message: &str,
+        context: Option<&str>,
+        category: Option<&str>,
+    ) -> Self {
         let mut full_message = message.to_string();
-        
+
         if let Some(ctx) = context {
             full_message.push_str(&format!(" [Context: {ctx}]"));
         }
-        
+
         if let Some(cat) = category {
             full_message.push_str(&format!(" [Category: {cat}]"));
         }
-        
+
         LogEvent {
             timestamp: Utc::now(),
             level: level.to_string(),
@@ -41,12 +46,9 @@ impl LogEvent {
         if let Some(parent) = std::path::Path::new(path).parent() {
             create_dir_all(parent)?;
         }
-        
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
-        
+
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
+
         let mut writer = std::io::BufWriter::new(file);
         let log_line = format!(
             "[{}] {}: {}\n",
@@ -54,13 +56,13 @@ impl LogEvent {
             self.level.to_uppercase(),
             self.message
         );
-        
+
         write!(writer, "{log_line}")?;
         writer.flush()?;
-        
+
         Ok(())
     }
-    
+
     pub fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "timestamp": self.timestamp.to_rfc3339(),

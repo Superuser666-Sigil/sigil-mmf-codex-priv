@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
@@ -7,7 +6,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 use crate::loa::LOA;
-use crate::sigil_encrypt::{encrypt, decrypt, decode_base64_key};
+use crate::sigil_encrypt::{decode_base64_key, decrypt, encrypt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct VaultMemoryBlock {
@@ -29,7 +28,8 @@ impl SigilVault {
         let mut memory = HashMap::new();
         if Path::new(path).exists() {
             if let Ok(mut file) = File::open(path) {
-                let key_opt = std::env::var("SIGIL_AES_KEY").ok()
+                let key_opt = std::env::var("SIGIL_AES_KEY")
+                    .ok()
                     .and_then(|k| decode_base64_key(&k).ok());
 
                 let mut raw = Vec::new();
@@ -39,7 +39,8 @@ impl SigilVault {
                     } else {
                         raw
                     };
-                    if let Ok(loaded) = serde_json::from_slice::<Vec<VaultMemoryBlock>>(&decrypted) {
+                    if let Ok(loaded) = serde_json::from_slice::<Vec<VaultMemoryBlock>>(&decrypted)
+                    {
                         for block in loaded {
                             memory.insert(block.id.clone(), block);
                         }
@@ -54,7 +55,13 @@ impl SigilVault {
         }
     }
 
-    pub fn add_block(&mut self, session_id: &str, mnemonic: Option<String>, loa: &LOA, content: &str) -> String {
+    pub fn add_block(
+        &mut self,
+        session_id: &str,
+        mnemonic: Option<String>,
+        loa: &LOA,
+        content: &str,
+    ) -> String {
         let id = Uuid::new_v4().to_string();
         let block = VaultMemoryBlock {
             id: id.clone(),
@@ -85,10 +92,13 @@ impl SigilVault {
     }
 
     fn persist(&self) -> Result<(), &'static str> {
-        let key_opt = std::env::var("SIGIL_AES_KEY").ok()
+        let key_opt = std::env::var("SIGIL_AES_KEY")
+            .ok()
             .and_then(|k| decode_base64_key(&k).ok());
 
-        let vec: Vec<_> = self.memory.values()
+        let vec: Vec<_> = self
+            .memory
+            .values()
             .filter(|b| !b.deleted)
             .cloned()
             .collect();

@@ -1,8 +1,8 @@
-use crate::audit_chain::{ReasoningChain, FrozenChain};
-use std::fs::{create_dir_all, File, OpenOptions};
-use std::io::{Write, BufWriter};
-use std::path::Path;
+use crate::audit_chain::{FrozenChain, ReasoningChain};
 use serde_json;
+use std::fs::{create_dir_all, File, OpenOptions};
+use std::io::{BufWriter, Write};
+use std::path::Path;
 
 /// Audit store for managing both ReasoningChain (process) and FrozenChain (immutable records)
 pub struct AuditStore {
@@ -37,21 +37,18 @@ impl AuditStore {
         let mut writer = BufWriter::new(file);
         let json = serde_json::to_string(chain)
             .map_err(|e| format!("Failed to serialize reasoning chain: {e}"))?;
-        
-        writeln!(writer, "{json}")
-            .map_err(|e| format!("Failed to write reasoning chain: {e}"))?;
-        
-        writer.flush()
+
+        writeln!(writer, "{json}").map_err(|e| format!("Failed to write reasoning chain: {e}"))?;
+
+        writer
+            .flush()
             .map_err(|e| format!("Failed to flush reasoning chain: {e}"))?;
 
         Ok(())
     }
 
     /// Store a FrozenChain (immutable record) - for production and audit trails
-    pub fn write_frozen_chain(
-        &self,
-        chain: &FrozenChain,
-    ) -> Result<(), String> {
+    pub fn write_frozen_chain(&self, chain: &FrozenChain) -> Result<(), String> {
         // Verify integrity before storing
         if !chain.verify_integrity()? {
             return Err("Cannot store FrozenChain with invalid integrity".into());
@@ -66,21 +63,18 @@ impl AuditStore {
         let mut writer = BufWriter::new(file);
         let json = serde_json::to_string(chain)
             .map_err(|e| format!("Failed to serialize frozen chain: {e}"))?;
-        
-        writeln!(writer, "{json}")
-            .map_err(|e| format!("Failed to write frozen chain: {e}"))?;
-        
-        writer.flush()
+
+        writeln!(writer, "{json}").map_err(|e| format!("Failed to write frozen chain: {e}"))?;
+
+        writer
+            .flush()
             .map_err(|e| format!("Failed to flush frozen chain: {e}"))?;
 
         Ok(())
     }
 
     /// Freeze a ReasoningChain and store it as a FrozenChain
-    pub fn freeze_and_store_chain(
-        &self,
-        chain: ReasoningChain,
-    ) -> Result<FrozenChain, String> {
+    pub fn freeze_and_store_chain(&self, chain: ReasoningChain) -> Result<FrozenChain, String> {
         // First, finalize the reasoning
         let mut finalized_chain = chain;
         finalized_chain.finalize_reasoning()?;
@@ -106,7 +100,7 @@ impl AuditStore {
             let line = line.map_err(|e| format!("Failed to read line: {e}"))?;
             let chain: FrozenChain = serde_json::from_str(&line)
                 .map_err(|e| format!("Failed to parse frozen chain: {e}"))?;
-            
+
             if chain.chain_id == chain_id {
                 // Verify integrity on retrieval
                 if !chain.verify_integrity()? {
@@ -126,7 +120,7 @@ impl AuditStore {
 
         while let Some(chain) = self.get_frozen_chain(&current_chain_id)? {
             chains.push(chain.clone());
-            
+
             // Get the first parent (assuming linear lineage for now)
             if let Some(parent_id) = chain.parent_chain_ids.first() {
                 current_chain_id = parent_id.clone();
@@ -151,16 +145,23 @@ impl AuditStore {
 
         for (line_num, line) in lines.enumerate() {
             let line = line.map_err(|e| format!("Failed to read line {}: {}", line_num + 1, e))?;
-            
+
             match serde_json::from_str::<FrozenChain>(&line) {
                 Ok(chain) => {
                     if !chain.verify_integrity()? {
-                        failed_chains.push(format!("Chain {} at line {} failed integrity check", 
-                            chain.chain_id, line_num + 1));
+                        failed_chains.push(format!(
+                            "Chain {} at line {} failed integrity check",
+                            chain.chain_id,
+                            line_num + 1
+                        ));
                     }
                 }
                 Err(e) => {
-                    failed_chains.push(format!("Failed to parse chain at line {}: {}", line_num + 1, e));
+                    failed_chains.push(format!(
+                        "Failed to parse chain at line {}: {}",
+                        line_num + 1,
+                        e
+                    ));
                 }
             }
         }
@@ -170,9 +171,7 @@ impl AuditStore {
 }
 
 // Legacy function for backward compatibility
-pub fn write_chain(
-    chain: ReasoningChain,
-) -> Result<String, String> {
+pub fn write_chain(chain: ReasoningChain) -> Result<String, String> {
     let store = AuditStore::new("logs/reasoning_chains.jsonl", "logs/frozen_chains.jsonl");
     let frozen_chain = FrozenChain::freeze_reasoning_chain(chain)?;
     store.write_frozen_chain(&frozen_chain)?;
