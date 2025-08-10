@@ -162,7 +162,13 @@ pub fn dispatch(cli: Cli) {
                 let enforcement_mode = match app_cfg.irl.enforcement_mode.to_lowercase().as_str() {
                     "active" => EnforcementMode::Active,
                     "strict" => EnforcementMode::Strict,
-                    _ => EnforcementMode::Passive,
+                    other => {
+                        eprintln!(
+                            "Warning: Unrecognized enforcement mode '{}'. Defaulting to 'Passive'.",
+                            app_cfg.irl.enforcement_mode
+                        );
+                        EnforcementMode::Passive
+                    }
                 };
                 let runtime_cfg = RuntimeIRLConfig {
                     active_model: app_cfg.irl.active_model.clone(),
