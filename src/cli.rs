@@ -185,7 +185,7 @@ pub fn dispatch(cli: Cli) {
                 }
                 if app_cfg.irl.explanation_enabled {
                     runtime.enable_explanation();
-                }
+                // Telemetry and explanation flags are now set only via RuntimeIRLConfig
 
                 Ok(Arc::new(RwLock::new(runtime)))
             };
