@@ -14,6 +14,7 @@
 use candle_core::{DType, Device, Result, Tensor};
 use candle_nn::{linear, ops::softmax, AdamW, Linear, Module, Optimizer, VarBuilder, VarMap};
 use clap::Parser;
+use figment::{Figment, providers::{Env, Format, Serialized, Toml}};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -35,6 +36,28 @@ struct Args {
 
     #[arg(long, default_value = "0.7")]
     alpha: f32,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+struct TrainConfig {
+    seed: Option<u64>,
+    epochs: usize,
+    batch_size: usize,
+    learning_rate: f64,
+}
+
+impl Default for TrainConfig {
+    fn default() -> Self {
+        Self { seed: Some(42), epochs: 10, batch_size: 32, learning_rate: 1e-4 }
+    }
+}
+
+fn load_train_config() -> TrainConfig {
+    Figment::from(Serialized::defaults(TrainConfig::default()))
+        .merge(Toml::file("mmf.toml"))
+        .merge(Env::prefixed("MMF_TRAIN_"))
+        .extract()
+        .unwrap_or_default()
 }
 
 /// Unified Sigil Network using Candle
@@ -102,23 +125,23 @@ impl RelationalSigilNet {
 }
 
 /// Generate synthetic training data
-fn generate_training_data(device: &Device) -> Result<(Tensor, Tensor)> {
+fn generate_training_data(device: &Device, batch_size: usize) -> Result<(Tensor, Tensor)> {
     // Generate random input data (batch_size=32, features=512)
-    let x = Tensor::randn(0f32, 1f32, (32, 512), device)?;
+    let x = Tensor::randn(0f32, 1f32, (batch_size, 512), device)?;
 
     // Generate random labels (batch_size=32)
-    let y = Tensor::randn(0f32, 1f32, (32, 1), device)?;
+    let y = Tensor::randn(0f32, 1f32, (batch_size, 1), device)?;
 
     Ok((x, y))
 }
 
 /// Load teacher model outputs from ONNX file
-fn load_teacher_outputs(path: &str, device: &Device) -> Result<Tensor> {
+fn load_teacher_outputs(path: &str, device: &Device, batch_size: usize) -> Result<Tensor> {
     println!("Loading teacher outputs from: {path}");
 
     // For now, we'll generate synthetic teacher outputs
     // In a real implementation, this would load from ONNX and run inference
-    let teacher_outputs = Tensor::randn(0f32, 1f32, (32, 1), device)?;
+    let teacher_outputs = Tensor::randn(0f32, 1f32, (batch_size, 1), device)?;
 
     println!(
         "Teacher outputs loaded with shape: {:?}",
@@ -157,22 +180,23 @@ fn train_unified(
     args: &Args,
 ) -> Result<UnifiedSigilNet> {
     let (x_train, y_train) = data;
-    let learning_rate = 1e-4;
+    let args_cfg = load_train_config();
+    let learning_rate = args_cfg.learning_rate as f64;
 
     println!("Starting unified training with knowledge distillation...");
 
     // Load teacher outputs if teacher model path is provided
     let teacher_outputs = if let Some(ref teacher_path) = args.teacher_model_path {
-        load_teacher_outputs(teacher_path, _device)?
+        load_teacher_outputs(teacher_path, _device, args_cfg.batch_size)?
     } else {
         // Generate synthetic teacher outputs for demonstration
-        Tensor::randn(0f32, 1f32, (32, 1), _device)?
+        Tensor::randn(0f32, 1f32, (args_cfg.batch_size, 1), _device)?
     };
 
     // Create optimizer using VarMap's variables
     let mut optimizer = AdamW::new_lr(var_map.all_vars(), learning_rate)?;
 
-    for epoch in 1..=10 {
+    for epoch in 1..=args_cfg.epochs {
         let student_output = model.forward(&x_train)?;
 
         // Calculate losses
@@ -220,22 +244,23 @@ fn train_relational(
     args: &Args,
 ) -> Result<RelationalSigilNet> {
     let (x_train, y_train) = data;
-    let learning_rate = 1e-4;
+    let args_cfg = load_train_config();
+    let learning_rate = args_cfg.learning_rate as f64;
 
     println!("Starting relational training with knowledge distillation...");
 
     // Load teacher outputs if teacher model path is provided
     let teacher_outputs = if let Some(ref teacher_path) = args.teacher_model_path {
-        load_teacher_outputs(teacher_path, _device)?
+        load_teacher_outputs(teacher_path, _device, args_cfg.batch_size)?
     } else {
         // Generate synthetic teacher outputs for demonstration
-        Tensor::randn(0f32, 1f32, (32, 1), _device)?
+        Tensor::randn(0f32, 1f32, (args_cfg.batch_size, 1), _device)?
     };
 
     // Create optimizer using VarMap's variables
     let mut optimizer = AdamW::new_lr(var_map.all_vars(), learning_rate)?;
 
-    for epoch in 1..=10 {
+    for epoch in 1..=args_cfg.epochs {
         let student_output = model.forward(&x_train)?;
 
         // Calculate losses
@@ -302,11 +327,11 @@ fn handle_model_output(
 }
 
 /// Load SigilDERG data (placeholder)
-fn load_sigilderg_data(device: &Device) -> Result<(Tensor, Tensor)> {
+fn load_sigilderg_data(device: &Device, batch_size: usize) -> Result<(Tensor, Tensor)> {
     // Placeholder implementation
     // In a real implementation, this would load actual SigilDERG data
     println!("Loading SigilDERG data (placeholder)");
-    generate_training_data(device)
+    generate_training_data(device, batch_size)
 }
 
 fn main() -> Result<()> {
@@ -319,8 +344,13 @@ fn main() -> Result<()> {
     println!("  Temperature: {}", args.temperature);
     println!("  Alpha (task vs distillation): {}", args.alpha);
 
-    // Load training data
-    let (x_train, y_train) = load_sigilderg_data(&device)?;
+    // Load training config and training data
+    let train_cfg = load_train_config();
+    // Seed PRNG for reproducibility if provided
+    if let Some(_seed) = train_cfg.seed {
+        // Candle's global seeding may differ by backend; placeholder retained for future use
+    }
+    let (x_train, y_train) = load_sigilderg_data(&device, train_cfg.batch_size)?;
     println!("Training data loaded: {:?}", x_train.shape());
 
     match args.model_type.as_str() {
