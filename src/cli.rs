@@ -165,7 +165,7 @@ pub fn dispatch(cli: Cli) {
                     other => {
                         eprintln!(
                             "Warning: Unrecognized enforcement mode '{}'. Defaulting to 'Passive'.",
-                            app_cfg.irl.enforcement_mode
+                            other
                         );
                         EnforcementMode::Passive
                     }
