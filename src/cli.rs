@@ -163,7 +163,16 @@ pub fn dispatch(cli: Cli) {
                     "active" => EnforcementMode::Active,
                     "strict" => EnforcementMode::Strict,
                     _ => EnforcementMode::Passive,
-                };
+                fn parse_enforcement_mode(s: &str) -> EnforcementMode {
+                    if s.eq_ignore_ascii_case("active") {
+                        EnforcementMode::Active
+                    } else if s.eq_ignore_ascii_case("strict") {
+                        EnforcementMode::Strict
+                    } else {
+                        EnforcementMode::Passive
+                    }
+                }
+                let enforcement_mode = parse_enforcement_mode(&app_cfg.irl.enforcement_mode);
                 let runtime_cfg = RuntimeIRLConfig {
                     active_model: app_cfg.irl.active_model.clone(),
                     threshold: app_cfg.irl.threshold,
