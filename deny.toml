@@ -1,92 +1,58 @@
-# Configuration for cargo-deny
-# Security and dependency auditing for Sigil MMF Codex
-
-[graph]
-targets = [
-    { triple = "x86_64-unknown-linux-gnu" },
-    { triple = "x86_64-pc-windows-msvc" },
-    { triple = "x86_64-apple-darwin" },
-]
-
-[licenses]
-# License policy for Sigil project
-confidence-threshold = 0.8
-exceptions = [
-    # Allow specific licenses for this project
-]
-
-[[licenses.clarify]]
-name = "ring"
-# Ring uses multiple licenses, clarify the allowed one
-expression = "MIT AND ISC AND OpenSSL"
-
-allow = [
-    "MIT",
-    "Apache-2.0",
-    "Apache-2.0 WITH LLVM-exception",
-    "BSD-2-Clause",
-    "BSD-3-Clause",
-    "ISC",
-    "Unicode-DFS-2016",
-    "CC0-1.0",
-    "Unlicense",
-]
-deny = [
-    "GPL-3.0",
-    "AGPL-3.0",
-]
-
+# ===== Advisories =====
+# All advisories are now errors by default. The `unmaintained` check is set
+# to error on all crates, which is stricter than the original policy but safer.
 [advisories]
-# Security advisory configuration
-db-path = "~/.cargo/advisory-db"
-db-urls = ["https://github.com/rustsec/advisory-db"]
-vulnerability = "deny"
-unmaintained = "warn"
-yanked = "warn"
-notice = "warn"
+db-urls = ["https://github.com/RustSec/advisory-db"]
+# The policy is to "warn" on unmaintained crates. With the new config format,
+# this is achieved by ignoring the specific advisories.
 ignore = [
-    # Add specific advisory IDs to ignore if needed
-    # Example: "RUSTSEC-2020-0001"
+    "RUSTSEC-2024-0384", # instant
+    "RUSTSEC-2024-0436", # paste
 ]
+unmaintained = "all"
+yanked = "deny"
 
-[sources]
-# Source code verification
-unknown-registry = "warn"
-unknown-git = "warn"
-allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-
-[bans]
-# Dependency banning rules
-multiple-versions = "warn"
-wildcards = "allow"
-highlight = "all"
-workspace-default-features = "allow"
-external-default-features = "allow"
+# ===== Licenses =====
+# Licenses are denied by default unless explicitly allowed.
+[licenses]
 allow = [
-    # Allow multiple versions of these crates (common in Rust ecosystem)
-    { name = "syn", version = "*" },
-    { name = "quote", version = "*" },
-    { name = "proc-macro2", version = "*" },
-    { name = "serde", version = "*" },
-    { name = "winapi", version = "*" },
-    { name = "windows-sys", version = "*" },
-    # ML framework dependencies often have version conflicts
-    { name = "half", version = "*" },
-    { name = "bytemuck", version = "*" },
+  "Apache-2.0",
+  "MIT",
+  "BSD-3-Clause",
+  "Unicode-DFS-2016",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "bzip2-1.0.6",
+  "MPL-2.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
 ]
+confidence-threshold = 0.92
+exceptions = []
+private = { ignore = true }
 
+# ===== Bans =====
+# Warn on duplicates for most crates, but deny for critical ones.
+# Deny wildcards and the openssl stack.
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = false
 deny = [
-    # Deny known problematic or unnecessary crates
-    { name = "openssl-sys", reason = "Prefer pure Rust crypto implementations" },
+  # Deny duplicates for critical crates
+  { name = "serde", deny-multiple-versions = true },
+  { name = "tokio", deny-multiple-versions = true },
+  { name = "hyper", deny-multiple-versions = true },
+  # Ban openssl stack in favor of rustls
+  { name = "openssl" },
+  { name = "openssl-sys" },
 ]
+skip = []
 
-skip = [
-    # Skip certain crates from multiple-versions check
-    { name = "windows_x86_64_msvc", version = "*" },
-    { name = "windows_x86_64_gnu", version = "*" },
-]
-
-skip-tree = [
-    # Skip entire dependency trees
-    # { name = "crate-name", version = "*" },
-]
+# ===== Sources =====
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

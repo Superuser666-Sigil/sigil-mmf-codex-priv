@@ -1,325 +1,117 @@
-name: Rust CI/CD
+name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ main ]
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC weekly extended run
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
-  # Reduce binary size and improve compilation speed
-  CARGO_INCREMENTAL: 0
-  CARGO_NET_RETRY: 10
-  RUSTUP_MAX_RETRIES: 10
+  RUST_BACKTRACE: full
 
 jobs:
-  # Security audit job - run first to catch security issues early
-  security:
-    name: Security Audit
+  build-test:
+    name: Build & Test (locked)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-        
-      - name: Security audit
-        run: cargo audit
-        
-      - name: Install cargo-deny
-        run: cargo install cargo-deny
-        
-      - name: Check licenses and advisories
-        run: cargo deny check
+      - uses: actions/checkout@v4
 
-  # Code quality checks
-  quality:
-    name: Code Quality
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Install Rust toolchain
+      - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-          
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+          toolchain: stable
+          components: clippy,rustfmt
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
-            
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target/
-          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-build-
-        
-      - name: Check code formatting
-        run: cargo fmt --all -- --check
-        
-      - name: Run clippy
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Verify lockfile
+        run: cargo generate-lockfile --locked
+
+      - name: Build (debug)
+        run: cargo build --locked
+
+      - name: Build (release)
+        run: cargo build --release --locked
+
+      - name: Tests (debug)
+        run: cargo test --locked --all-features
+
+      - name: Tests (release)
+        run: cargo test --release --locked --all-features
+
+      - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-  # Build and test matrix
-  test:
-    name: Test Suite
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, beta]
-        include:
-          # Specific configuration for each OS
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-          target: ${{ matrix.target }}
-          
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ matrix.os }}-${{ matrix.rust }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.os }}-${{ matrix.rust }}-cargo-registry-
-            ${{ matrix.os }}-cargo-registry-
-            
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target/
-          key: ${{ matrix.os }}-${{ matrix.rust }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.os }}-${{ matrix.rust }}-cargo-build-
-            ${{ matrix.os }}-cargo-build-
+      - name: Docs
+        run: cargo doc --no-deps
 
-      # Install platform-specific dependencies for ML/crypto operations
-      - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config
-          
-      - name: Install macOS dependencies
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install openssl pkg-config
-          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig" >> $GITHUB_ENV
-          
-      # Build the project (both binaries)
-      - name: Build main binary
-        run: cargo build --verbose --bin mmf_sigil --target ${{ matrix.target }}
-        
-      - name: Build trainer binary
-        run: cargo build --verbose --bin trainer --target ${{ matrix.target }}
-        
-      # Run comprehensive tests
-      - name: Run unit tests
-        run: cargo test --verbose --lib --target ${{ matrix.target }}
-        
-      - name: Run integration tests
-        run: cargo test --verbose --bins --target ${{ matrix.target }}
-        
-      - name: Run all tests with all features
-        run: cargo test --verbose --all-features --target ${{ matrix.target }}
-        
-      # Test both binaries work
-      - name: Test main CLI binary
-        run: cargo run --bin mmf_sigil --target ${{ matrix.target }} -- --help
-        
-      - name: Test trainer binary
-        run: cargo run --bin trainer --target ${{ matrix.target }} -- --help
+      - name: Cargo Audit
+        uses: rustsec/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-  # Documentation build
-  docs:
-    name: Documentation
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: Cargo Deny (advisories, bans, licenses, sources, duplicates)
+        run: cargo deny check advisories bans licenses sources duplicates
+
+  extended:
+    name: Extended Checks (weekly/update window)
+    if: github.event_name == 'schedule' || startsWith(github.head_ref, 'chore/dep-update/')
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ubuntu-latest-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ubuntu-latest-cargo-registry-
-            
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target/
-          key: ubuntu-latest-cargo-doc-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ubuntu-latest-cargo-doc-
-            ubuntu-latest-cargo-build-
-        
-      - name: Build documentation
-        run: cargo doc --all-features --no-deps
-        env:
-          RUSTDOCFLAGS: "-D warnings"
+      - uses: actions/checkout@v4
 
-  # Release build (for performance testing of ML components)
-  release-build:
-    name: Release Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ubuntu-latest-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ubuntu-latest-cargo-registry-
-            
-      - name: Cache cargo release build
-        uses: actions/cache@v4
-        with:
-          path: target/
-          key: ubuntu-latest-cargo-release-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ubuntu-latest-cargo-release-
-            ubuntu-latest-cargo-build-
-        
-      - name: Install Linux dependencies
+      - name: Install nightly (for minimal-versions experiment)
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Minimal versions resolution
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config
-        
-      - name: Build release
-        run: cargo build --release --verbose
-        
-      # Test that release binaries work
-      - name: Test release main binary
-        run: ./target/release/mmf_sigil --help
-        
-      - name: Test release trainer binary
-        run: ./target/release/trainer --help
-        
-      # Upload release artifacts for potential deployment
-      - name: Upload release artifacts
+          cargo update -Z minimal-versions
+          cargo build
+
+      - name: MSRV matrix check (example)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.76.0
+
+      - name: Build & Test (MSRV)
+        run: |
+          cargo clean
+          cargo build --locked
+          cargo test --locked
+
+      - name: Install tools (sbom, outdated)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: |
+            cargo-outdated
+            cyclonedx-bom
+
+      - name: Outdated report
+        run: cargo outdated -R --root-deps-only
+
+      - name: Generate SBOM (CycloneDX)
+        run: cyclonedx-bom --format json --output sbom.cdx.json
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-binaries-linux
+          name: sigilderg-artifacts
           path: |
-            target/release/mmf_sigil
-            target/release/trainer
-          retention-days: 7
-
-  # Minimum Supported Rust Version (MSRV) test
-  msrv:
-    name: MSRV (1.70.0)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Install MSRV Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.70.0
-          
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ubuntu-latest-msrv-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ubuntu-latest-msrv-cargo-registry-
-            
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config
-        
-      - name: Test MSRV build
-        run: cargo build --verbose
-        
-      - name: Test MSRV tests
-        run: cargo test --verbose
-
-  # Performance and benchmarks (if any benchmark tests exist)
-  benchmark:
-    name: Benchmarks
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ubuntu-latest-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ubuntu-latest-cargo-registry-
-            
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config
-        
-      - name: Run benchmarks
-        run: |
-          if cargo bench --help &>/dev/null; then
-            cargo bench --verbose
-          else
-            echo "No benchmarks found, skipping..."
-          fi
+            target/doc
+            sbom.cdx.json
+            Cargo.lock

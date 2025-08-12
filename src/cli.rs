@@ -162,17 +162,7 @@ pub fn dispatch(cli: Cli) {
                 let enforcement_mode = match app_cfg.irl.enforcement_mode.to_lowercase().as_str() {
                     "active" => EnforcementMode::Active,
                     "strict" => EnforcementMode::Strict,
-                    _ => EnforcementMode::Passive,
-                fn parse_enforcement_mode(s: &str) -> EnforcementMode {
-                    if s.eq_ignore_ascii_case("active") {
-                        EnforcementMode::Active
-                    } else if s.eq_ignore_ascii_case("strict") {
-                        EnforcementMode::Strict
-                    } else {
-                        EnforcementMode::Passive
-                    }
-                }
-                let enforcement_mode = parse_enforcement_mode(&app_cfg.irl.enforcement_mode);
+
                 let runtime_cfg = RuntimeIRLConfig {
                     active_model: app_cfg.irl.active_model.clone(),
                     threshold: app_cfg.irl.threshold,
@@ -194,7 +184,7 @@ pub fn dispatch(cli: Cli) {
                 }
                 if app_cfg.irl.explanation_enabled {
                     runtime.enable_explanation();
-                // Telemetry and explanation enabling is now handled by the runtime constructor.
+           // Telemetry and explanation enabling is now handled by the runtime constructor.
 
                 Ok(Arc::new(RwLock::new(runtime)))
             };
