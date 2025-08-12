@@ -144,22 +144,54 @@ pub fn dispatch(cli: Cli) {
             Err(e) => eprintln!("LOA detection failed: {e}"),
         },
         Commands::Serve { host, port } => {
-            // Build a minimal runtime core for serving trust endpoints
+            // Build a runtime core using env/TOML-backed config
             let addr = format!("{host}:{port}");
 
             let build_runtime = || -> Result<Arc<RwLock<crate::sigil_runtime_core::SigilRuntimeCore>>, String> {
                 use crate::canon_store_sled::CanonStoreSled;
-                use crate::irl_modes::IRLConfig as RuntimeIRLConfig;
+                use crate::config_loader::load_config;
+                use crate::irl_modes::{EnforcementMode, IRLConfig as RuntimeIRLConfig};
                 use crate::loa::LOA;
                 use crate::sigil_runtime_core::SigilRuntimeCore;
                 use std::sync::Mutex;
+
+                // Load app config (mmf.toml and MMF_* env)
+                let app_cfg = load_config();
+
+                // Map loader IRL config → runtime IRL config
+                let enforcement_mode = match app_cfg.irl.enforcement_mode.to_lowercase().as_str() {
+                    "active" => EnforcementMode::Active,
+                    "strict" => EnforcementMode::Strict,
+                    other => {
+                        eprintln!(
+                            "Warning: Unrecognized enforcement mode '{}'. Defaulting to 'Passive'.",
+                            other
+                        );
+                        EnforcementMode::Passive
+                    }
+                };
+                let runtime_cfg = RuntimeIRLConfig {
+                    active_model: app_cfg.irl.active_model.clone(),
+                    threshold: app_cfg.irl.threshold,
+                    enforcement_mode,
+                    telemetry_enabled: app_cfg.irl.telemetry_enabled,
+                    explanation_enabled: app_cfg.irl.explanation_enabled,
+                };
 
                 let store = CanonStoreSled::new("data/canon_store")
                     .map_err(|e| format!("Failed to create canon store: {e}"))?;
                 let canon_store = Arc::new(Mutex::new(store));
 
-                let runtime = SigilRuntimeCore::new(LOA::Observer, canon_store, RuntimeIRLConfig::default())
+                let mut runtime = SigilRuntimeCore::new(LOA::Observer, canon_store, runtime_cfg)
                     .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
+
+                // Respect telemetry/explainer flags
+                if app_cfg.irl.telemetry_enabled {
+                    runtime.enable_telemetry();
+                }
+                if app_cfg.irl.explanation_enabled {
+                    runtime.enable_explanation();
+                // Telemetry and explanation flags are now set only via RuntimeIRLConfig
 
                 Ok(Arc::new(RwLock::new(runtime)))
             };
