@@ -1,7 +1,8 @@
 # Rust build artifacts
 target/
 **/*.rs.bk
-Cargo.lock
+# Allow committing Cargo.lock for CI reproducibility
+# Cargo.lock
 
 # Generated model files and training artifacts
 *.onnx

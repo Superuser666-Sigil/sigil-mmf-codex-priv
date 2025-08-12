@@ -162,14 +162,7 @@ pub fn dispatch(cli: Cli) {
                 let enforcement_mode = match app_cfg.irl.enforcement_mode.to_lowercase().as_str() {
                     "active" => EnforcementMode::Active,
                     "strict" => EnforcementMode::Strict,
-                    other => {
-                        eprintln!(
-                            "Warning: Unrecognized enforcement mode '{}'. Defaulting to 'Passive'.",
-                            other
-                        );
-                        EnforcementMode::Passive
-                    }
-                };
+
                 let runtime_cfg = RuntimeIRLConfig {
                     active_model: app_cfg.irl.active_model.clone(),
                     threshold: app_cfg.irl.threshold,
@@ -191,7 +184,7 @@ pub fn dispatch(cli: Cli) {
                 }
                 if app_cfg.irl.explanation_enabled {
                     runtime.enable_explanation();
-                // Telemetry and explanation flags are now set only via RuntimeIRLConfig
+           // Telemetry and explanation enabling is now handled by the runtime constructor.
 
                 Ok(Arc::new(RwLock::new(runtime)))
             };
