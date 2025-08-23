@@ -156,16 +156,13 @@ pub fn dispatch(cli: Cli) {
                 use std::sync::Mutex;
 
                 // Load app config (mmf.toml and MMF_* env)
-                let app_cfg = load_config().map_err(|e| format!("Failed to load config: {e}"))?;
+                let app_cfg = load_config();
 
                 // Map loader IRL config → runtime IRL config
                 let enforcement_mode = match app_cfg.irl.enforcement_mode.to_lowercase().as_str() {
                     "active" => EnforcementMode::Active,
                     "strict" => EnforcementMode::Strict,
-                    "shadow" | "passive" => EnforcementMode::Passive,
-                    other => {
-                        return Err(format!("Unknown enforcement mode: {other}"));
-                    }
+                    _ => EnforcementMode::Active,
                 };
 
                 let runtime_cfg = RuntimeIRLConfig {
