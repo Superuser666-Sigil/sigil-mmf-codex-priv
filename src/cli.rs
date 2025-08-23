@@ -162,7 +162,7 @@ pub fn dispatch(cli: Cli) {
                 let enforcement_mode = match app_cfg.irl.enforcement_mode.to_lowercase().as_str() {
                     "active" => EnforcementMode::Active,
                     "strict" => EnforcementMode::Strict,
-                    _ => EnforcementMode::Passive,
+                    _ => EnforcementMode::Active,
                 };
 
                 let runtime_cfg = RuntimeIRLConfig {
