@@ -3,14 +3,16 @@ use crate::loa::LOA;
 use crate::sigil_runtime_core::SigilRuntimeCore;
 use axum::{
     extract::Extension,
+    http::StatusCode,
     response::Json,
     routing::{get, post},
     Router,
 };
-use prometheus::{Encoder, TextEncoder, Registry, IntCounter};
-use std::sync::OnceLock;
+use log::error;
+use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use std::sync::OnceLock;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Deserialize)]
@@ -61,13 +63,19 @@ pub fn build_trust_router(runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
 async fn check_trust(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
     Json(req): Json<TrustCheckRequest>,
-) -> Json<TrustCheckResponse> {
+) -> Result<Json<TrustCheckResponse>, (StatusCode, String)> {
     // increment metric
     init_metrics();
     if let Some(counter) = TRUST_CHECK_TOTAL.get() {
         counter.inc();
     }
-    let runtime = runtime.read().unwrap();
+    let runtime = runtime.read().map_err(|e| {
+        error!("Runtime read lock poisoned: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "runtime lock poisoned".to_string(),
+        )
+    })?;
     let loa = LOA::from_str(&req.loa).unwrap_or(LOA::Guest);
     let event = AuditEvent::new(
         &req.who,
@@ -90,30 +98,44 @@ async fn check_trust(
         _ => (true, 0.0, None, None),
     };
 
-    Json(TrustCheckResponse {
+    Ok(Json(TrustCheckResponse {
         allowed,
         score,
         model_id,
         threshold,
-    })
+    }))
 }
 
 #[axum::debug_handler]
 async fn trust_status(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
-) -> Json<serde_json::Value> {
-    let runtime = runtime.read().unwrap();
-    Json(runtime.status())
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let runtime = runtime.read().map_err(|e| {
+        error!("Runtime read lock poisoned: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "runtime lock poisoned".to_string(),
+        )
+    })?;
+    Ok(Json(runtime.status()))
 }
 
 async fn healthz() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "ok" }))
 }
 
-async fn readyz(Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>) -> Json<serde_json::Value> {
-    let runtime = runtime.read().unwrap();
+async fn readyz(
+    Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let runtime = runtime.read().map_err(|e| {
+        error!("Runtime read lock poisoned: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "runtime lock poisoned".to_string(),
+        )
+    })?;
     let ready = runtime.active_model_id.is_some();
-    Json(serde_json::json!({ "ready": ready }))
+    Ok(Json(serde_json::json!({ "ready": ready })))
 }
 
 // Simple Prometheus metrics endpoint using a global registry
@@ -122,7 +144,9 @@ static TRUST_CHECK_TOTAL: OnceLock<IntCounter> = OnceLock::new();
 
 fn init_metrics() {
     let registry = METRICS_REGISTRY.get_or_init(Registry::new);
-    let counter = TRUST_CHECK_TOTAL.get_or_init(|| IntCounter::new("trust_check_total", "Total trust check requests").expect("counter"));
+    let counter = TRUST_CHECK_TOTAL.get_or_init(|| {
+        IntCounter::new("trust_check_total", "Total trust check requests").expect("counter")
+    });
     let _ = registry.register(Box::new(counter.clone()));
 }
 
