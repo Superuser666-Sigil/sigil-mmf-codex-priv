@@ -157,7 +157,8 @@ pub fn dispatch(cli: Cli) {
                     use std::sync::Mutex;
 
                     // Load app config (mmf.toml and MMF_* env)
-                    let app_cfg = load_config();
+                    let app_cfg =
+                        load_config().map_err(|e| format!("Failed to load config: {e}"))?;
 
                     // Map loader IRL config → runtime IRL config
                     let enforcement_mode =
@@ -330,7 +331,7 @@ pub fn dispatch(cli: Cli) {
         } => {
             // Find the key file in secure locations
             let key_path = match find_key_file(&key_id) {
-                Some path) => path,
+                Some(path) => path,
                 None => {
                     eprintln!("❌ Key file not found: {key_id}.json");
                     eprintln!("   Searched in: current directory and secure key directory");
