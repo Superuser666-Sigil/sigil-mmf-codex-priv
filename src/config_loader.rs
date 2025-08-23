@@ -58,15 +58,29 @@ impl Default for TrustConfig {
     }
 }
 
-pub fn load_config() -> MMFConfig {
-    Figment::from(Serialized::defaults(MMFConfig {
-        license_secret: "changeme".into(),
+#[derive(serde::Serialize)]
+struct MMFConfigDefaults {
+    db_backend: String,
+    #[serde(default)]
+    irl: IRLConfig,
+    #[serde(default)]
+    trust: TrustConfig,
+}
+
+pub fn load_config() -> Result<MMFConfig, figment::Error> {
+    let figment = Figment::from(Serialized::defaults(MMFConfigDefaults {
         db_backend: "sled".into(),
         irl: IRLConfig::default(),
         trust: TrustConfig::default(),
     }))
     .merge(Toml::file("mmf.toml"))
-    .merge(Env::prefixed("MMF_"))
-    .extract()
-    .expect("Failed to load MMF config")
+    .merge(Env::prefixed("MMF_"));
+
+    let config: MMFConfig = figment.extract()?;
+
+    if config.license_secret.trim().is_empty() {
+        return Err(figment::Error::from("license_secret must be set"));
+    }
+
+    Ok(config)
 }
