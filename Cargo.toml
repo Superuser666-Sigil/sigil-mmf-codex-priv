@@ -43,7 +43,7 @@ getrandom = "=0.3.3"
 dirs = "6.0"
 
 # HTTP client (avoid OpenSSL by using rustls)
-reqwest = { version = "=0.12.22", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "=0.12.23", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 # File handling
 zip = { version = "4.3", features = ["deflate"] }
