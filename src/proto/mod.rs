@@ -1,10 +1,9 @@
-//! Placeholder module for protocol buffer or API schemas.
-//! Required for P0 clean build. All interfaces must justify themselves under Rule Zero.
+//! RPC and protocol buffer schema definitions.
+//!
+//! Currently this module exposes a minimal [JSON-RPC 2.0](https://www.jsonrpc.org/)
+//! interface used for communication between Sigil components. Additional
+//! protocol types may be added in the future as requirements expand.
 
 pub mod rpc;
 
-/// Reminder: No protocol logic is implemented yet.
-/// RPC calls must be audited and wrapped in ReasoningChain when implemented.
-pub fn placeholder() {
-    // This function exists to satisfy the module structure
-}
+pub use rpc::{RpcError, RpcRequest, RpcResponse};

@@ -187,7 +187,6 @@ pub fn dispatch(cli: Cli) {
                 if app_cfg.irl.explanation_enabled {
                     runtime.enable_explanation();
                 }
-
                 // Telemetry and explanation enabling is now handled by the runtime constructor.
 
                 Ok(Arc::new(RwLock::new(runtime)))
