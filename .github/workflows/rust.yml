@@ -18,7 +18,7 @@ jobs:
     name: Build & Test (locked)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -53,7 +53,7 @@ jobs:
         run: cargo doc --no-deps
 
       - name: Cargo Audit
-        uses: rustsec/audit-check@v1
+        uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -70,7 +70,7 @@ jobs:
     if: github.event_name == 'schedule' || startsWith(github.head_ref, 'chore/dep-update/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install nightly (for minimal-versions experiment)
         uses: dtolnay/rust-toolchain@nightly
