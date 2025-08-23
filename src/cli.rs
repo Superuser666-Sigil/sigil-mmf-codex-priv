@@ -156,12 +156,17 @@ pub fn dispatch(cli: Cli) {
                 use std::sync::Mutex;
 
                 // Load app config (mmf.toml and MMF_* env)
-                let app_cfg = load_config();
+                let app_cfg = load_config().map_err(|e| format!("Failed to load config: {e}"))?;
 
                 // Map loader IRL config → runtime IRL config
                 let enforcement_mode = match app_cfg.irl.enforcement_mode.to_lowercase().as_str() {
                     "active" => EnforcementMode::Active,
                     "strict" => EnforcementMode::Strict,
+                    "shadow" | "passive" => EnforcementMode::Passive,
+                    other => {
+                        return Err(format!("Unknown enforcement mode: {other}"));
+                    }
+                };
 
                 let runtime_cfg = RuntimeIRLConfig {
                     active_model: app_cfg.irl.active_model.clone(),
@@ -184,7 +189,8 @@ pub fn dispatch(cli: Cli) {
                 }
                 if app_cfg.irl.explanation_enabled {
                     runtime.enable_explanation();
-           // Telemetry and explanation enabling is now handled by the runtime constructor.
+                }
+                // Telemetry and explanation enabling is now handled by the runtime constructor.
 
                 Ok(Arc::new(RwLock::new(runtime)))
             };
