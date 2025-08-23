@@ -30,6 +30,7 @@ pub struct TrustCheckResponse {
     score: f64,
     model_id: Option<String>,
     threshold: Option<f64>,
+    error: Option<String>,
 }
 
 // Add trust-related routes
@@ -85,24 +86,40 @@ async fn check_trust(
         &loa,
     );
 
-    let (allowed, score, model_id, threshold) = match (
-        runtime.validate_action(&event),
-        runtime.evaluate_event(&event),
-    ) {
-        (Ok(allowed), eval) => (
-            allowed,
-            eval.score.into(),
-            runtime.active_model_id.clone(),
-            Some(runtime.threshold),
-        ),
-        _ => (true, 0.0, None, None),
+    let eval_result = if let Some(model_id) = &runtime.active_model_id {
+        runtime
+            .trust_evaluator
+            .evaluate_event(&event, model_id)
+            .map(|(s, a)| (s as f64, a))
+    } else {
+        Err("No active model available".to_string())
     };
+
+    let (allowed, score, model_id, threshold, error) =
+        match (runtime.validate_action(&event), eval_result) {
+            (Ok(allowed), Ok((score, _))) => (
+                allowed,
+                score,
+                runtime.active_model_id.clone(),
+                Some(runtime.threshold),
+                None,
+            ),
+            (Err(e), _) => {
+                error!("Trust validation failed for {}: {}", req.action, e);
+                (false, 0.0, None, None, Some(e.to_string()))
+            }
+            (_, Err(e)) => {
+                error!("Trust evaluation failed for {}: {}", req.action, e);
+                (false, 0.0, None, None, Some(e))
+            }
+        };
 
     Ok(Json(TrustCheckResponse {
         allowed,
         score,
         model_id,
         threshold,
+        error,
     }))
 }
 
