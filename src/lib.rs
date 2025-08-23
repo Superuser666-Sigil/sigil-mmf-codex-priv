@@ -22,6 +22,7 @@ pub mod audit_store;
 pub mod audit_verifier;
 pub mod elevation_verifier;
 pub mod loa;
+pub mod policy_model;
 pub mod trust_registry;
 pub mod trusted_knowledge;
 

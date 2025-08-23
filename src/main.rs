@@ -55,7 +55,13 @@ Sigil Runtime
     info!(message = "Sigil Runtime starting", banner = %banner);
 
     // Load config
-    let config_data = load_config();
+    let config_data = match load_config() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            error!(message = "Failed to load config", error = %e);
+            return;
+        }
+    };
 
     // Validate license
     let license_path =
