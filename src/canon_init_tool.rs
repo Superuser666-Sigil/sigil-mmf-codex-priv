@@ -15,7 +15,7 @@ use crate::trusted_knowledge::{SigilVerdict, TrustedKnowledgeEntry};
 use serde_json;
 
 pub fn run_loader(file_path: &str, license_token: &str) -> Result<(), String> {
-    let config = load_config();
+    let config = load_config().map_err(|e| format!("Failed to load config: {e}"))?;
     let loa = LOA::from_str(license_token).unwrap_or(LOA::Guest);
     let session = Arc::new(SessionContext::new("canon_init_session", loa));
 

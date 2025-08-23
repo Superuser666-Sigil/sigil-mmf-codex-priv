@@ -330,7 +330,7 @@ pub fn dispatch(cli: Cli) {
         } => {
             // Find the key file in secure locations
             let key_path = match find_key_file(&key_id) {
-                Some(path) => path,
+                Some path) => path,
                 None => {
                     eprintln!("❌ Key file not found: {key_id}.json");
                     eprintln!("   Searched in: current directory and secure key directory");

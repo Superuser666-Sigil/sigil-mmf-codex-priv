@@ -3,6 +3,7 @@ use crate::loa::LOA;
 use crate::sigil_runtime_core::SigilRuntimeCore;
 use axum::{
     extract::Extension,
+    http::StatusCode,
     response::Json,
     routing::{get, post},
     Router,
@@ -63,13 +64,19 @@ pub fn build_trust_router(runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
 async fn check_trust(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
     Json(req): Json<TrustCheckRequest>,
-) -> Json<TrustCheckResponse> {
+) -> Result<Json<TrustCheckResponse>, (StatusCode, String)> {
     // increment metric
     init_metrics();
     if let Some(counter) = TRUST_CHECK_TOTAL.get() {
         counter.inc();
     }
-    let runtime = runtime.read().unwrap();
+    let runtime = runtime.read().map_err(|e| {
+        error!("Runtime read lock poisoned: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "runtime lock poisoned".to_string(),
+        )
+    })?;
     let loa = LOA::from_str(&req.loa).unwrap_or(LOA::Guest);
     let event = AuditEvent::new(
         &req.who,
@@ -107,21 +114,27 @@ async fn check_trust(
             }
         };
 
-    Json(TrustCheckResponse {
+    Ok(Json(TrustCheckResponse {
         allowed,
         score,
         model_id,
         threshold,
         error,
-    })
+    }))
 }
 
 #[axum::debug_handler]
 async fn trust_status(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
-) -> Json<serde_json::Value> {
-    let runtime = runtime.read().unwrap();
-    Json(runtime.status())
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let runtime = runtime.read().map_err(|e| {
+        error!("Runtime read lock poisoned: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "runtime lock poisoned".to_string(),
+        )
+    })?;
+    Ok(Json(runtime.status()))
 }
 
 async fn healthz() -> Json<serde_json::Value> {
@@ -130,10 +143,16 @@ async fn healthz() -> Json<serde_json::Value> {
 
 async fn readyz(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
-) -> Json<serde_json::Value> {
-    let runtime = runtime.read().unwrap();
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let runtime = runtime.read().map_err(|e| {
+        error!("Runtime read lock poisoned: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "runtime lock poisoned".to_string(),
+        )
+    })?;
     let ready = runtime.active_model_id.is_some();
-    Json(serde_json::json!({ "ready": ready }))
+    Ok(Json(serde_json::json!({ "ready": ready })))
 }
 
 // Simple Prometheus metrics endpoint using a global registry
