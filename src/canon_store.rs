@@ -26,50 +26,45 @@ pub fn revert_node(id: &str, to_hash: &str) -> Result<(), String> {
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse canon JSON: {e}"))?;
 
     // Find the node to revert
-    if let Some(entries) = canon.get_mut("entries") {
-        if let Some(entries_arr) = entries.as_array_mut() {
-            for entry in entries_arr.iter_mut() {
-                if let Some(entry_id) = entry.get("id").and_then(|id| id.as_str()) {
-                    if entry_id == id {
-                        // Check if the target hash exists in version history
-                        if let Some(versions) = entry.get("versions") {
-                            if let Some(version_array) = versions.as_array() {
-                                for version in version_array {
-                                    if let Some(version_hash) =
-                                        version.get("hash").and_then(|h| h.as_str())
-                                    {
-                                        if version_hash == to_hash {
-                                            // Revert to this version
-                                            if let Some(content) = version.get("content") {
-                                                entry["content"] = content.clone();
-                                                entry["current_hash"] =
-                                                    serde_json::Value::String(to_hash.to_string());
+    if let Some(entries) = canon.get_mut("entries")
+        && let Some(entries_arr) = entries.as_array_mut() {
+        for entry in entries_arr.iter_mut() {
+            if let Some(entry_id) = entry.get("id").and_then(|id| id.as_str())
+                && entry_id == id {
+                // Check if the target hash exists in version history
+                if let Some(versions) = entry.get("versions")
+                    && let Some(version_array) = versions.as_array() {
+                    for version in version_array {
+                        if let Some(version_hash) =
+                            version.get("hash").and_then(|h| h.as_str())
+                            && version_hash == to_hash {
+                            // Revert to this version
+                            if let Some(content) = version.get("content") {
+                                entry["content"] = content.clone();
+                                entry["current_hash"] =
+                                    serde_json::Value::String(to_hash.to_string());
 
-                                                // Write back to file
-                                                let updated_content = serde_json::to_string_pretty(
-                                                    &canon,
-                                                )
-                                                .map_err(|e| {
-                                                    format!("Failed to serialize canon: {e}")
-                                                })?;
+                                // Write back to file
+                                let updated_content = serde_json::to_string_pretty(
+                                    &canon,
+                                )
+                                .map_err(|e| {
+                                    format!("Failed to serialize canon: {e}")
+                                })?;
 
-                                                fs::write(canon_path, updated_content).map_err(
-                                                    |e| format!("Failed to write canon file: {e}"),
-                                                )?;
+                                fs::write(canon_path, updated_content).map_err(
+                                    |e| format!("Failed to write canon file: {e}"),
+                                )?;
 
-                                                println!("✅ Successfully reverted node '{id}' to hash '{to_hash}'");
-                                                return Ok(());
-                                            }
-                                        }
-                                    }
-                                }
+                                println!("✅ Successfully reverted node '{id}' to hash '{to_hash}'");
+                                return Ok(());
                             }
                         }
-                        return Err(format!(
-                            "Target hash '{to_hash}' not found in version history for node '{id}'"
-                        ));
                     }
                 }
+                return Err(format!(
+                    "Target hash '{to_hash}' not found in version history for node '{id}'"
+                ));
             }
         }
     }

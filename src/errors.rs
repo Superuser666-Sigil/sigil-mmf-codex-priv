@@ -200,11 +200,11 @@ impl SigilError {
 /// instead of panicking.
 pub trait SafeLock<T: ?Sized> {
     /// Safely lock a mutex, returning a SigilError on poison
-    fn safe_lock(&self) -> SigilResult<std::sync::MutexGuard<T>>;
+    fn safe_lock(&self) -> SigilResult<std::sync::MutexGuard<'_, T>>;
 }
 
 impl<T: ?Sized> SafeLock<T> for std::sync::Mutex<T> {
-    fn safe_lock(&self) -> SigilResult<std::sync::MutexGuard<T>> {
+    fn safe_lock(&self) -> SigilResult<std::sync::MutexGuard<'_, T>> {
         self.lock().map_err(|_| SigilError::MutexPoisoned {
             resource: "generic_mutex".to_string(),
         })
@@ -214,11 +214,11 @@ impl<T: ?Sized> SafeLock<T> for std::sync::Mutex<T> {
 /// Helper trait for safe RwLock read operations
 pub trait SafeReadLock<T: ?Sized> {
     /// Safely acquire a read lock
-    fn safe_read(&self) -> SigilResult<std::sync::RwLockReadGuard<T>>;
+    fn safe_read(&self) -> SigilResult<std::sync::RwLockReadGuard<'_, T>>;
 }
 
 impl<T: ?Sized> SafeReadLock<T> for std::sync::RwLock<T> {
-    fn safe_read(&self) -> SigilResult<std::sync::RwLockReadGuard<T>> {
+    fn safe_read(&self) -> SigilResult<std::sync::RwLockReadGuard<'_, T>> {
         self.read().map_err(|_| SigilError::MutexPoisoned {
             resource: "rwlock_read".to_string(),
         })
@@ -228,11 +228,11 @@ impl<T: ?Sized> SafeReadLock<T> for std::sync::RwLock<T> {
 /// Helper trait for safe RwLock write operations
 pub trait SafeWriteLock<T: ?Sized> {
     /// Safely acquire a write lock
-    fn safe_write(&self) -> SigilResult<std::sync::RwLockWriteGuard<T>>;
+    fn safe_write(&self) -> SigilResult<std::sync::RwLockWriteGuard<'_, T>>;
 }
 
 impl<T: ?Sized> SafeWriteLock<T> for std::sync::RwLock<T> {
-    fn safe_write(&self) -> SigilResult<std::sync::RwLockWriteGuard<T>> {
+    fn safe_write(&self) -> SigilResult<std::sync::RwLockWriteGuard<'_, T>> {
         self.write().map_err(|_| SigilError::MutexPoisoned {
             resource: "rwlock_write".to_string(),
         })

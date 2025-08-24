@@ -53,23 +53,21 @@ impl CanonNode {
         let mut node = CanonNode::new(id, title, trust_level);
 
         // Parse flags if present
-        if let Some(flags) = json.get("flags") {
-            if let Some(flags_array) = flags.as_array() {
-                for flag in flags_array {
-                    if let Some(flag_str) = flag.as_str() {
-                        node.flags.push(flag_str.to_string());
-                    }
+        if let Some(flags) = json.get("flags")
+            && let Some(flags_array) = flags.as_array() {
+            for flag in flags_array {
+                if let Some(flag_str) = flag.as_str() {
+                    node.flags.push(flag_str.to_string());
                 }
             }
         }
 
         // Parse tags if present
-        if let Some(tags) = json.get("tags") {
-            if let Some(tags_array) = tags.as_array() {
-                for tag in tags_array {
-                    if let Some(tag_str) = tag.as_str() {
-                        node.tags.push(tag_str.to_string());
-                    }
+        if let Some(tags) = json.get("tags")
+            && let Some(tags_array) = tags.as_array() {
+            for tag in tags_array {
+                if let Some(tag_str) = tag.as_str() {
+                    node.tags.push(tag_str.to_string());
                 }
             }
         }
@@ -140,14 +138,13 @@ pub fn load_canon_entries(file: &str) -> Result<Vec<CanonNode>, String> {
 
     let mut nodes = Vec::new();
 
-    if let Some(entries) = json.get("entries") {
-        if let Some(entries_array) = entries.as_array() {
-            for entry in entries_array {
-                if let Ok(node) = CanonNode::from_json(entry) {
-                    nodes.push(node);
-                } else {
-                    println!("Warning: Failed to parse canon entry: {entry:?}");
-                }
+    if let Some(entries) = json.get("entries")
+        && let Some(entries_array) = entries.as_array() {
+        for entry in entries_array {
+            if let Ok(node) = CanonNode::from_json(entry) {
+                nodes.push(node);
+            } else {
+                println!("Warning: Failed to parse canon entry: {entry:?}");
             }
         }
     }

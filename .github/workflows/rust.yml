@@ -31,20 +31,26 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      - name: Fetch dependencies
+        run: cargo fetch
+
+      - name: Update lockfile
+        run: cargo update
+
       - name: Verify lockfile
-        run: cargo generate-lockfile --locked
+        run: cargo generate-lockfile --offline
 
       - name: Build (debug)
-        run: cargo build --locked
+        run: cargo build --offline
 
       - name: Build (release)
-        run: cargo build --release --locked
+        run: cargo build --release --offline
 
       - name: Tests (debug)
-        run: cargo test --locked --all-features
+        run: cargo test --offline --all-features
 
       - name: Tests (release)
-        run: cargo test --release --locked --all-features
+        run: cargo test --release --offline --all-features
 
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
@@ -91,8 +97,9 @@ jobs:
       - name: Build & Test (MSRV)
         run: |
           cargo clean
-          cargo build --locked
-          cargo test --locked
+          cargo fetch
+          cargo build --offline
+          cargo test --offline
 
       - name: Install tools (sbom, outdated)
         uses: taiki-e/install-action@v2

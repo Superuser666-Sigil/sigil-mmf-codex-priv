@@ -4,7 +4,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
 };
 use base64::{Engine as _, engine::general_purpose};
-use rand::TryRngCore;
+use rand::RngCore;
 use rand::rngs::OsRng;
 
 pub fn encrypt(data: &[u8], key: &[u8]) -> Result<(Vec<u8>, [u8; 12]), &'static str> {
@@ -12,8 +12,7 @@ pub fn encrypt(data: &[u8], key: &[u8]) -> Result<(Vec<u8>, [u8; 12]), &'static 
     let cipher = Aes256Gcm::new(key);
     let mut nonce_bytes = [0u8; 12];
     let mut rng = OsRng;
-    rng.try_fill_bytes(&mut nonce_bytes)
-        .map_err(|_| "nonce generation failed")?;
+    rng.fill_bytes(&mut nonce_bytes);
     let ciphertext = cipher
         .encrypt(Nonce::from_slice(&nonce_bytes), data)
         .map_err(|_| "encryption failed")?;

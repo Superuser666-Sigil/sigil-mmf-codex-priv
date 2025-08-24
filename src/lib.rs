@@ -67,6 +67,7 @@ pub mod backup_recovery;
 pub mod session_context;
 pub mod sigil_runtime_core;
 pub mod sigil_runtime_core_patch_with_irl;
+pub mod input_validator;
 pub mod sigil_session;
 pub mod sigilirl;
 

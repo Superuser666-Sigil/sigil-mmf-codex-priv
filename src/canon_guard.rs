@@ -12,7 +12,8 @@ pub fn guard_canon_mutation(
         return Err("Denied: Chain verdict is not Allow.".into());
     }
 
-    if !validate_witnesses(&chain.witnesses, &crate::loa::LOA::Root, payload) {
+    if !validate_witnesses(&chain.witnesses, &crate::loa::LOA::Root, payload)
+        .map_err(|e| format!("Witness validation error: {}", e))? {
         return Err("Denied: Witness validation failed.".into());
     }
 
@@ -108,9 +109,9 @@ fn validate_frozen_chain_witnesses(chain: &FrozenChain, payload: &str) -> Result
             signature: w.signature.clone(),
         })
         .collect();
-    Ok(validate_witnesses(
-        &witnesses,
-        &crate::loa::LOA::Root,
-        payload,
-    ))
+          validate_witnesses(
+          &witnesses,
+          &crate::loa::LOA::Root,
+          payload,
+      ).map_err(|e| format!("Witness validation error: {}", e))
 }
