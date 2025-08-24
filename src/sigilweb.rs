@@ -2,11 +2,11 @@ use crate::audit::AuditEvent;
 use crate::loa::LOA;
 use crate::sigil_runtime_core::SigilRuntimeCore;
 use axum::{
+    Router,
     extract::Extension,
     http::StatusCode,
     response::Json,
     routing::{get, post},
-    Router,
 };
 use log::error;
 use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
@@ -33,11 +33,24 @@ pub struct TrustCheckResponse {
     error: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ExtensionRegisterRequest {
+    name: String,
+    loa: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ExtensionRegisterResponse {
+    registered: bool,
+    error: Option<String>,
+}
+
 // Add trust-related routes
 pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
     router
         .route("/api/trust/check", post(check_trust))
         .route("/api/trust/status", get(trust_status))
+        .route("/api/extensions/register", post(register_extension_api))
         .layer(Extension(runtime))
 }
 
@@ -47,9 +60,11 @@ pub fn build_trust_router(runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
         // current endpoints
         .route("/api/trust/check", post(check_trust))
         .route("/api/trust/status", get(trust_status))
+        .route("/api/extensions/register", post(register_extension_api))
         // versioned aliases
         .route("/v1/trust/check", post(check_trust))
         .route("/v1/trust/status", get(trust_status))
+        .route("/v1/extensions/register", post(register_extension_api))
         // backward-compatible aliases used by some tests
         .route("/trust/check", post(check_trust))
         .route("/trust/status", get(trust_status))
@@ -121,6 +136,41 @@ async fn check_trust(
         threshold,
         error,
     }))
+}
+
+#[axum::debug_handler]
+async fn register_extension_api(
+    Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
+    Json(req): Json<ExtensionRegisterRequest>,
+) -> Result<Json<ExtensionRegisterResponse>, (StatusCode, String)> {
+    // Input validation
+    if req.name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Extension name cannot be empty".to_string()));
+    }
+    let loa = match LOA::from_str(&req.loa) {
+        Ok(loa) => loa,
+        Err(_) => {
+            return Err((StatusCode::BAD_REQUEST, format!("Invalid LOA: {}", req.loa)));
+        }
+    };
+    // Optionally use runtime if needed (for consistency)
+    let _runtime = runtime.read().map_err(|e| {
+        error!("Runtime read lock poisoned: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "runtime lock poisoned".to_string(),
+        )
+    })?;
+    match crate::extensions::register_extension(&req.name, &req.loa) {
+        Ok(_) => Ok(Json(ExtensionRegisterResponse {
+            registered: true,
+            error: None,
+        })),
+        Err(e) => {
+            error!("Extension registration failed for {}: {}", req.name, e);
+            Err((StatusCode::BAD_REQUEST, e))
+        }
+    }
 }
 
 #[axum::debug_handler]

@@ -3,7 +3,7 @@
 
 use crate::audit::log_api_event;
 use crate::canon_validator::validate_canon_file;
-use crate::extension_runtime::{route_command as route_extension_handler, ExtensionCommand};
+use crate::extension_runtime::{ExtensionCommand, route_command as route_extension_handler};
 use crate::loa::{self, LOA};
 use crate::module_scope::ModuleScope;
 use crate::sigilctl::{log_loa_violation, notify_success, warn_user};
@@ -58,10 +58,38 @@ pub fn load_extension(name: &str, loa: &str) -> Result<(), String> {
     }
 }
 
-// Register an extension (future use: dynamic registry, trust pre-checks)
-pub fn register_extension(_name: &str) {
-    // Placeholder for runtime extension registry
-    notify_success("Extension registered (placeholder)");
+// Register an extension module after verifying its canon and required LOA.
+// This mirrors `load_extension` but is exposed for dynamic registration via CLI/API.
+pub fn register_extension(name: &str, loa: &str) -> Result<(), String> {
+    let canon_path = format!("modules/{name}/canon/sr6e.json");
+
+    // Log the registration attempt for audit visibility
+    let _ = log_api_event("/module_register", "internal", 200, loa);
+
+    // Validate canon structure before accepting the extension
+    let canon = Path::new(&canon_path);
+    match validate_canon_file(canon) {
+        Ok(_) => {
+            let required = LOA::from(loa);
+
+            if let Ok(mut map) = registry().lock() {
+                map.insert(
+                    name.to_string(),
+                    ExtensionInfo {
+                        required_loa: required.clone(),
+                    },
+                );
+            }
+
+            notify_success(&format!("Extension '{name}' registered at LOA: {loa}"));
+            Ok(())
+        }
+        Err(e) => {
+            warn_user(&format!("Failed to validate extension canon: {e}"));
+            log_loa_violation(&LOA::Guest, &LOA::Operator);
+            Err(format!("Extension '{name}' failed to validate: {e}"))
+        }
+    }
 }
 
 // List all currently loaded extensions and their LOA requirements.
