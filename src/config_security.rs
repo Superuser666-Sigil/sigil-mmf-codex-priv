@@ -18,7 +18,7 @@ impl SecureConfig {
     /// Create a new secure configuration manager
     pub fn new(master_key: &str) -> Result<Self, String> {
         let key = decode_base64_key(master_key)
-            .map_err(|e| format!("Invalid master key: {}", e))?;
+            .map_err(|e| format!("Invalid master key: {e}"))?;
         
         Ok(SecureConfig {
             master_key: key,
@@ -28,7 +28,7 @@ impl SecureConfig {
     /// Load encrypted configuration from file
     pub fn load_encrypted<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T, String> {
         let encrypted_data = fs::read(path)
-            .map_err(|e| format!("Failed to read config file: {}", e))?;
+            .map_err(|e| format!("Failed to read config file: {e}"))?;
         
         if encrypted_data.len() < 12 {
             return Err("Invalid encrypted config format".to_string());
@@ -39,25 +39,25 @@ impl SecureConfig {
             .map_err(|_| "Invalid nonce format".to_string())?;
         
         let decrypted = decrypt(ciphertext, &self.master_key, &nonce)
-            .map_err(|e| format!("Failed to decrypt config: {}", e))?;
+            .map_err(|e| format!("Failed to decrypt config: {e}"))?;
         
         serde_json::from_slice(&decrypted)
-            .map_err(|e| format!("Failed to parse config: {}", e))
+            .map_err(|e| format!("Failed to parse config: {e}"))
     }
     
     /// Save configuration encrypted to file
     pub fn save_encrypted<T: Serialize>(&self, config: &T, path: &str) -> Result<(), String> {
         let json_data = serde_json::to_vec(config)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+            .map_err(|e| format!("Failed to serialize config: {e}"))?;
         
         let (ciphertext, nonce) = encrypt(&json_data, &self.master_key)
-            .map_err(|e| format!("Failed to encrypt config: {}", e))?;
+            .map_err(|e| format!("Failed to encrypt config: {e}"))?;
         
         let mut encrypted_data = nonce.to_vec();
         encrypted_data.extend_from_slice(&ciphertext);
         
         fs::write(path, encrypted_data)
-            .map_err(|e| format!("Failed to write config file: {}", e))
+            .map_err(|e| format!("Failed to write config file: {e}"))
     }
     
     /// Validate environment variables comprehensively
@@ -73,7 +73,7 @@ impl SecureConfig {
         
         for var in &required_vars {
             if std::env::var(var).is_err() {
-                errors.push(format!("Missing required environment variable: {}", var));
+                errors.push(format!("Missing required environment variable: {var}"));
             }
         }
         
@@ -95,7 +95,7 @@ impl SecureConfig {
             }
             
             if !Path::new(&data_dir).exists() {
-                errors.push(format!("MMF_DATA_DIR '{}' does not exist", data_dir));
+                errors.push(format!("MMF_DATA_DIR '{data_dir}' does not exist"));
             }
         }
         
@@ -228,7 +228,7 @@ impl SecureMMFConfig {
         
         // Create security metadata
         let mut hasher = sha2::Sha256::new();
-        hasher.update(format!("{}:{}:{}", data_dir, audit_log_path, allow_operator_canon_write).as_bytes());
+        hasher.update(format!("{data_dir}:{audit_log_path}:{allow_operator_canon_write}").as_bytes());
         let config_hash = format!("{:x}", hasher.finalize());
         
         let security_metadata = SecurityMetadata {

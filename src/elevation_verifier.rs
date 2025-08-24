@@ -41,7 +41,7 @@ pub fn validate_elevation(
         let audit = AuditEvent::new(
             user_id,
             "elevation_denied",
-            Some(&format!("{:?}->{:?}", current_loa, target_loa)),
+            Some(&format!("{current_loa:?}->{target_loa:?}")),
             session_id,
             current_loa,
         ).with_severity(LogLevel::Warn);
@@ -74,7 +74,7 @@ pub fn validate_elevation(
         let audit = AuditEvent::new(
             user_id,
             "elevation_token_invalid",
-            Some(&format!("{:?}->{:?}", current_loa, target_loa)),
+            Some(&format!("{current_loa:?}->{target_loa:?}")),
             session_id,
             current_loa,
         ).with_severity(LogLevel::Warn);
@@ -86,7 +86,7 @@ pub fn validate_elevation(
     let audit = AuditEvent::new(
         user_id,
         "elevation_granted",
-        Some(&format!("{:?}->{:?}", current_loa, target_loa)),
+        Some(&format!("{current_loa:?}->{target_loa:?}")),
         session_id,
         current_loa,
     ).with_severity(LogLevel::Info);
@@ -123,7 +123,7 @@ pub fn generate_elevation_token(
     let audit = AuditEvent::new(
         user_id,
         "elevation_token_generated",
-        Some(&format!("{:?} for {} hours", target_loa, duration_hours)),
+        Some(&format!("{target_loa:?} for {duration_hours} hours")),
         session_id,
         &LOA::Root, // Only Root can generate tokens
     ).with_severity(LogLevel::Info);

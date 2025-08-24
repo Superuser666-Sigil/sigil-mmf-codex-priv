@@ -14,8 +14,7 @@ impl TrustGuard {
         let (model_id, score, allowed) = PolicyModel::evaluate(context, input);
         // Emit an audit-friendly trace of the decision path.
         println!(
-            "TrustGuard::score_action model={} score={:.2} allowed={}",
-            model_id, score, allowed
+            "TrustGuard::score_action model={model_id} score={score:.2} allowed={allowed}"
         );
         IRLInfo {
             model_id,

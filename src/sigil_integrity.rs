@@ -20,7 +20,7 @@ lazy_static! {
 /// Load a witness public key from file
 fn load_witness_key(path: &str) -> Result<VerifyingKey, String> {
     let key_bytes = std::fs::read(path)
-        .map_err(|e| format!("Failed to load witness key from {}: {}", path, e))?;
+        .map_err(|e| format!("Failed to load witness key from {path}: {e}"))?;
     
     if key_bytes.len() != 32 {
         return Err(format!("Invalid key length: expected 32 bytes, got {}", key_bytes.len()));
@@ -30,7 +30,7 @@ fn load_witness_key(path: &str) -> Result<VerifyingKey, String> {
     key_array.copy_from_slice(&key_bytes);
     
     VerifyingKey::from_bytes(&key_array)
-        .map_err(|e| format!("Invalid witness key format in {}: {}", path, e))
+        .map_err(|e| format!("Invalid witness key format in {path}: {e}"))
 }
 
 /// Initialize the witness registry with trusted public keys
@@ -51,10 +51,10 @@ pub fn initialize_witness_registry() -> SigilResult<()> {
         match load_witness_key(key_path) {
             Ok(public_key) => {
                 registry.insert(witness_id.to_string(), public_key);
-                log::info!("Loaded witness key for: {}", witness_id);
+                log::info!("Loaded witness key for: {witness_id}");
             }
             Err(e) => {
-                log::warn!("Failed to load witness key for {}: {}", witness_id, e);
+                log::warn!("Failed to load witness key for {witness_id}: {e}");
             }
         }
     }
@@ -68,7 +68,7 @@ pub fn add_witness(witness_id: &str, public_key: VerifyingKey) -> SigilResult<()
         .map_err(|_| crate::errors::SigilError::internal("Failed to acquire witness registry lock"))?;
     
     registry.insert(witness_id.to_string(), public_key);
-    log::info!("Added witness to registry: {}", witness_id);
+    log::info!("Added witness to registry: {witness_id}");
     
     Ok(())
 }
@@ -79,9 +79,9 @@ pub fn remove_witness(witness_id: &str) -> SigilResult<()> {
         .map_err(|_| crate::errors::SigilError::internal("Failed to acquire witness registry lock"))?;
     
     if registry.remove(witness_id).is_some() {
-        log::info!("Removed witness from registry: {}", witness_id);
+        log::info!("Removed witness from registry: {witness_id}");
     } else {
-        log::warn!("Witness not found in registry: {}", witness_id);
+        log::warn!("Witness not found in registry: {witness_id}");
     }
     
     Ok(())

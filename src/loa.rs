@@ -103,14 +103,10 @@ impl LOA {
     
     /// Check if this LOA can elevate to target LOA
     pub fn can_elevate_to(&self, target: &LOA) -> bool {
-        match (self, target) {
-            (LOA::Root, _) => true,
-            (LOA::Mentor, LOA::Root) => true,
-            (LOA::Operator, LOA::Mentor | LOA::Root) => true,
-            (LOA::Observer, LOA::Operator | LOA::Mentor | LOA::Root) => true,
-            (LOA::Guest, LOA::Observer | LOA::Operator | LOA::Mentor | LOA::Root) => true,
-            _ => false,
-        }
+        matches!(
+            (self, target),
+            (LOA::Root, _) | (LOA::Mentor, LOA::Root) | (LOA::Operator, LOA::Mentor | LOA::Root) | (LOA::Observer, LOA::Operator | LOA::Mentor | LOA::Root) | (LOA::Guest, LOA::Observer | LOA::Operator | LOA::Mentor | LOA::Root)
+        )
     }
     
     /// Get the next LOA level in the hierarchy

@@ -21,16 +21,16 @@ pub fn revert_node(id: &str, to_hash: &str) -> Result<(), String> {
     let secure_file_ops = SecureFileOperations::new(
         vec!["canon files".to_string()], 
         1024 * 1024 // 1MB max file size
-    ).map_err(|e| format!("Failed to initialize secure file operations: {}", e))?;
+    ).map_err(|e| format!("Failed to initialize secure file operations: {e}"))?;
     
     // Load the current canon file securely
     let canon_path = "canon files/canon.json";
     let content_bytes = secure_file_ops.read_file_secure(
         std::path::Path::new(canon_path)
-    ).map_err(|e| format!("Failed to read canon file securely: {}", e))?;
+    ).map_err(|e| format!("Failed to read canon file securely: {e}"))?;
     
     let content = String::from_utf8(content_bytes)
-        .map_err(|e| format!("Failed to parse canon file content: {}", e))?;
+        .map_err(|e| format!("Failed to parse canon file content: {e}"))?;
 
     let mut canon: Value =
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse canon JSON: {e}"))?;
@@ -65,7 +65,7 @@ pub fn revert_node(id: &str, to_hash: &str) -> Result<(), String> {
                                 secure_file_ops.write_file_secure(
                                     std::path::Path::new(canon_path),
                                     updated_content.as_bytes()
-                                ).map_err(|e| format!("Failed to write canon file securely: {}", e))?;
+                                ).map_err(|e| format!("Failed to write canon file securely: {e}"))?;
 
                                 println!("✅ Successfully reverted node '{id}' to hash '{to_hash}'");
                                 return Ok(());
