@@ -61,6 +61,14 @@ pub enum Commands {
     /// Display current LOA identity
     Whoami,
 
+    /// Register an extension module with the runtime
+    RegisterExtension {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        loa: String,
+    },
+
     /// Serve the HTTP API (trust routes, health, versioned endpoints)
     Serve {
         /// Host/IP to bind
@@ -143,6 +151,11 @@ pub fn dispatch(cli: Cli) {
             Ok(loa) => println!("You are operating as {loa:?}"),
             Err(e) => eprintln!("LOA detection failed: {e}"),
         },
+        Commands::RegisterExtension { name, loa } => {
+            if let Err(e) = crate::extensions::register_extension(&name, &loa) {
+                eprintln!("Failed to register extension: {e}");
+            }
+        }
         Commands::Serve { host, port } => {
             // Build a runtime core using env/TOML-backed config
             let addr = format!("{host}:{port}");

@@ -1,7 +1,6 @@
 use crate::errors::SigilResult;
 use base64::Engine;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -26,7 +25,10 @@ pub enum KeyType {
 impl SigilKeyPair {
     /// Generate a new Ed25519 key pair
     pub fn generate(key_id: &str, key_type: KeyType) -> SigilResult<Self> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let mut key_bytes = [0u8; 32];
+        getrandom::fill(&mut key_bytes)
+            .map_err(|e| crate::errors::SigilError::auth(format!("Failed to generate key: {e}")))?;
+        let signing_key = SigningKey::from_bytes(&key_bytes);
         let verifying_key = signing_key.verifying_key();
 
         let public_key = base64::engine::general_purpose::STANDARD.encode(verifying_key.to_bytes());
