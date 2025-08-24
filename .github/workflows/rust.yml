@@ -31,9 +31,14 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      - name: Fetch dependencies
+        run: cargo fetch
+
+      - name: Update lockfile
+        run: cargo update
+
       - name: Verify lockfile
         run: cargo generate-lockfile --offline
-
 
       - name: Build (debug)
         run: cargo build --offline
@@ -92,6 +97,7 @@ jobs:
       - name: Build & Test (MSRV)
         run: |
           cargo clean
+          cargo fetch
           cargo build --offline
           cargo test --offline
 
