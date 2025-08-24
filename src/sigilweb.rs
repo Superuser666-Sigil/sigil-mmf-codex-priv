@@ -140,8 +140,27 @@ async fn check_trust(
 
 #[axum::debug_handler]
 async fn register_extension_api(
+    Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
     Json(req): Json<ExtensionRegisterRequest>,
 ) -> Result<Json<ExtensionRegisterResponse>, (StatusCode, String)> {
+    // Input validation
+    if req.name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Extension name cannot be empty".to_string()));
+    }
+    let loa = match LOA::from_str(&req.loa) {
+        Ok(loa) => loa,
+        Err(_) => {
+            return Err((StatusCode::BAD_REQUEST, format!("Invalid LOA: {}", req.loa)));
+        }
+    };
+    // Optionally use runtime if needed (for consistency)
+    let _runtime = runtime.read().map_err(|e| {
+        error!("Runtime read lock poisoned: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "runtime lock poisoned".to_string(),
+        )
+    })?;
     match crate::extensions::register_extension(&req.name, &req.loa) {
         Ok(_) => Ok(Json(ExtensionRegisterResponse {
             registered: true,
