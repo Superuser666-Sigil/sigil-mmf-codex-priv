@@ -40,17 +40,17 @@ rand = "=0.8.5"
 getrandom = "=0.3.3"
 argon2 = "0.5"
 
-# Cross-platform utilities
-dirs = "6.0"
+# Cross-platform utilities (optional for Docker-only deployment)
+dirs = { version = "6.0", optional = true }
 
-# HTTP client (avoid OpenSSL by using rustls)
-reqwest = { version = "=0.12.23", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+# HTTP client (minimal features for IRL adapter)
+reqwest = { version = "=0.12.23", default-features = false, features = ["blocking", "json", "rustls-tls", "gzip"] }
 
-# File handling
-zip = { version = "4.3", features = ["deflate"] }
+# File handling (minimal features)
+zip = { version = "4.3", default-features = false, features = ["deflate"] }
 
-# Configuration
-figment = { version = "0.10", features = ["env", "toml"] }
+# Configuration (minimal features)
+figment = { version = "0.10", default-features = false, features = ["env", "toml"] }
 
 # Logging
 log = "0.4"
@@ -59,16 +59,26 @@ log = "0.4"
 lazy_static = "1.4"
 regex = "1.10"
 
-# Candle ML framework (replacing Burn)
+# Candle ML framework (core component - IRL trust scoring)
 candle-core = "=0.9.1"
 candle-nn = "=0.9.1"
 candle-transformers = "=0.9.1"
 
-# ONNX support
+# ONNX support (core component - model import/export)
 tract-onnx = "=0.21.10"
 
-# Observability
-prometheus = "=0.14.0"
+# Observability (minimal features)
+prometheus = { version = "=0.14.0", default-features = false, features = ["process"] }
 
 [dev-dependencies]
 tempfile = "3.0"
+
+[features]
+default = ["full"]
+full = ["dirs"]
+minimal = []
+docker = []
+web = []
+cli = []
+ml = []
+security = []

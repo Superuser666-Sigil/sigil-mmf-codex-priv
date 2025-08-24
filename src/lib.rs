@@ -71,6 +71,13 @@ pub mod input_validator;
 pub mod sigil_session;
 pub mod sigilirl;
 
+// Platform optimizations
+pub mod platform_optimizations;
+
+// Security protections
+pub mod rate_limiter;
+pub mod csrf_protection;
+
 // Encryption & integrity
 pub mod sigil_encrypt;
 pub mod sigil_exporter;
