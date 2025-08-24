@@ -1,9 +1,10 @@
 use crate::canon_store::CanonStore;
-use crate::loa::{can_read_canon, can_write_canon, LOA};
+use crate::loa::{LOA, can_read_canon, can_write_canon};
 use crate::sigil_encrypt::{decode_base64_key, decrypt, encrypt};
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
 use serde_json;
 use sled::Db;
+use std::convert::TryInto;
 
 pub struct CanonStoreSled {
     db: Db,
@@ -27,7 +28,13 @@ impl CanonStore for CanonStoreSled {
                 .ok()
                 .and_then(|k| decode_base64_key(&k).ok());
             let data = if let Some(key) = key_opt {
-                decrypt(&ivec, &key).unwrap_or_else(|_| ivec.to_vec())
+                if ivec.len() >= 12 {
+                    let (nonce_bytes, ciphertext) = ivec.split_at(12);
+                    let nonce: [u8; 12] = nonce_bytes.try_into().unwrap();
+                    decrypt(ciphertext, &key, &nonce).unwrap_or_else(|_| ivec.to_vec())
+                } else {
+                    ivec.to_vec()
+                }
             } else {
                 ivec.to_vec()
             };
@@ -51,7 +58,11 @@ impl CanonStore for CanonStoreSled {
                 .ok()
                 .and_then(|k| decode_base64_key(&k).ok())
             {
-                encrypt(&serialized, &key).map_err(|_| "Canon encryption failed")?
+                let (ciphertext, nonce) =
+                    encrypt(&serialized, &key).map_err(|_| "Canon encryption failed")?;
+                let mut out = nonce.to_vec();
+                out.extend_from_slice(&ciphertext);
+                out
             } else {
                 serialized
             }
