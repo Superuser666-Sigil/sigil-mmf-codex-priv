@@ -1,7 +1,7 @@
 use crate::loa::LOA;
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
+use crate::secure_file_ops::SecureFileOperations;
 use serde_json::Value;
-use std::fs;
 
 pub trait CanonStore: Send + Sync {
     fn load_entry(&self, key: &str, loa: &LOA) -> Option<TrustedKnowledgeEntry>;
@@ -17,10 +17,20 @@ pub trait CanonStore: Send + Sync {
 }
 
 pub fn revert_node(id: &str, to_hash: &str) -> Result<(), String> {
-    // Load the current canon file
+    // Initialize secure file operations
+    let secure_file_ops = SecureFileOperations::new(
+        vec!["canon files".to_string()], 
+        1024 * 1024 // 1MB max file size
+    ).map_err(|e| format!("Failed to initialize secure file operations: {}", e))?;
+    
+    // Load the current canon file securely
     let canon_path = "canon files/canon.json";
-    let content =
-        fs::read_to_string(canon_path).map_err(|e| format!("Failed to read canon file: {e}"))?;
+    let content_bytes = secure_file_ops.read_file_secure(
+        std::path::Path::new(canon_path)
+    ).map_err(|e| format!("Failed to read canon file securely: {}", e))?;
+    
+    let content = String::from_utf8(content_bytes)
+        .map_err(|e| format!("Failed to parse canon file content: {}", e))?;
 
     let mut canon: Value =
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse canon JSON: {e}"))?;
@@ -44,7 +54,7 @@ pub fn revert_node(id: &str, to_hash: &str) -> Result<(), String> {
                                 entry["current_hash"] =
                                     serde_json::Value::String(to_hash.to_string());
 
-                                // Write back to file
+                                // Write back to file securely
                                 let updated_content = serde_json::to_string_pretty(
                                     &canon,
                                 )
@@ -52,9 +62,10 @@ pub fn revert_node(id: &str, to_hash: &str) -> Result<(), String> {
                                     format!("Failed to serialize canon: {e}")
                                 })?;
 
-                                fs::write(canon_path, updated_content).map_err(
-                                    |e| format!("Failed to write canon file: {e}"),
-                                )?;
+                                secure_file_ops.write_file_secure(
+                                    std::path::Path::new(canon_path),
+                                    updated_content.as_bytes()
+                                ).map_err(|e| format!("Failed to write canon file securely: {}", e))?;
 
                                 println!("✅ Successfully reverted node '{id}' to hash '{to_hash}'");
                                 return Ok(());

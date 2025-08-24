@@ -69,34 +69,81 @@ pub fn freeze_and_guard_canon_mutation(
 
 /// Extract verdict from a FrozenChain's reasoning trace
 fn extract_verdict_from_frozen_chain(chain: &FrozenChain) -> Result<Verdict, String> {
-    // For now, we'll look at the reasoning steps to determine the verdict
-    // This is a simplified implementation - in practice, you'd want to store
-    // the verdict explicitly in the FrozenChain structure
-
-    let reasoning_text = &chain
-        .reasoning_trace
-        .reasoning_steps
+    // Look for explicit verdict in hyperparameters first
+    if let Some(verdict_str) = chain.metadata.hyperparameters.get("verdict") {
+        return match verdict_str.as_str() {
+            "Allow" => Ok(Verdict::Allow),
+            "Deny" => Ok(Verdict::Deny),
+            "Defer" => Ok(Verdict::Defer),
+            "ManualReview" => Ok(Verdict::ManualReview),
+            _ => Err("Invalid verdict in metadata".to_string()),
+        };
+    }
+    
+    // Fallback to reasoning analysis with more sophisticated logic
+    let reasoning_text = &chain.reasoning_trace.reasoning_steps
         .iter()
         .map(|step| step.logic.clone())
         .collect::<Vec<_>>()
         .join("\n");
-
-    // Simple heuristic: look for keywords in the reasoning
-    if reasoning_text.to_lowercase().contains("allow")
-        || reasoning_text.to_lowercase().contains("permit")
-    {
-        Ok(Verdict::Allow)
-    } else if reasoning_text.to_lowercase().contains("deny")
-        || reasoning_text.to_lowercase().contains("reject")
-    {
-        Ok(Verdict::Deny)
-    } else if reasoning_text.to_lowercase().contains("defer")
-        || reasoning_text.to_lowercase().contains("postpone")
-    {
-        Ok(Verdict::Defer)
-    } else {
-        Ok(Verdict::ManualReview)
+    
+    // Use more sophisticated analysis
+    let verdict_score = analyze_reasoning_for_verdict(reasoning_text);
+    
+    match verdict_score {
+        score if score > 0.8 => Ok(Verdict::Allow),
+        score if score < 0.2 => Ok(Verdict::Deny),
+        score if score < 0.5 => Ok(Verdict::ManualReview),
+        _ => Ok(Verdict::Defer),
     }
+}
+
+/// Analyze reasoning text to determine verdict score
+fn analyze_reasoning_for_verdict(reasoning_text: &str) -> f64 {
+    let text = reasoning_text.to_lowercase();
+    let mut score: f64 = 0.5; // Neutral starting point
+    
+    // Positive indicators
+    let positive_keywords = [
+        "allow", "permit", "approve", "accept", "valid", "safe", "trusted",
+        "authorized", "legitimate", "compliant", "secure", "verified"
+    ];
+    
+    // Negative indicators
+    let negative_keywords = [
+        "deny", "reject", "block", "forbid", "invalid", "unsafe", "untrusted",
+        "unauthorized", "illegitimate", "non-compliant", "insecure", "unverified"
+    ];
+    
+    // Uncertainty indicators
+    let uncertainty_keywords = [
+        "defer", "postpone", "review", "manual", "uncertain", "unclear",
+        "ambiguous", "conflicting", "inconclusive", "needs_review"
+    ];
+    
+    // Count positive keywords
+    for keyword in &positive_keywords {
+        if text.contains(keyword) {
+            score += 0.1;
+        }
+    }
+    
+    // Count negative keywords
+    for keyword in &negative_keywords {
+        if text.contains(keyword) {
+            score -= 0.1;
+        }
+    }
+    
+    // Count uncertainty keywords
+    for keyword in &uncertainty_keywords {
+        if text.contains(keyword) {
+            score -= 0.05; // Reduce confidence but not as much as negative
+        }
+    }
+    
+    // Clamp score between 0.0 and 1.0
+    score.clamp(0.0, 1.0)
 }
 
 /// Validate witnesses for a FrozenChain

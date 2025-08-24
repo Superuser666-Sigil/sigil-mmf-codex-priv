@@ -2,10 +2,12 @@ use crate::audit::AuditEvent;
 use crate::loa::LOA;
 use crate::sigil_runtime_core::SigilRuntimeCore;
 use crate::input_validator::InputValidator;
+use crate::rate_limiter::RateLimiter;
+use crate::csrf_protection::CSRFProtection;
 use axum::{
     Router,
     extract::Extension,
-    http::StatusCode,
+    http::{StatusCode, HeaderMap},
     response::Json,
     routing::{get, post},
 };
@@ -48,15 +50,25 @@ pub struct ExtensionRegisterResponse {
 
 // Add trust-related routes
 pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
+    // Initialize security components
+    let rate_limiter = Arc::new(RateLimiter::new(100, 60)); // 100 requests per minute
+    let csrf_protection = Arc::new(CSRFProtection::new(3600)); // 1 hour token lifetime
+    
     router
         .route("/api/trust/check", post(check_trust))
         .route("/api/trust/status", get(trust_status))
         .route("/api/extensions/register", post(register_extension_api))
         .layer(Extension(runtime))
+        .layer(Extension(rate_limiter))
+        .layer(Extension(csrf_protection))
 }
 
 /// Build a minimal router exposing trust endpoints, versioned alias, and health checks
 pub fn build_trust_router(runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
+    // Initialize security components
+    let rate_limiter = Arc::new(RateLimiter::new(100, 60)); // 100 requests per minute
+    let csrf_protection = Arc::new(CSRFProtection::new(3600)); // 1 hour token lifetime
+    
     Router::new()
         // current endpoints
         .route("/api/trust/check", post(check_trust))
@@ -74,13 +86,37 @@ pub fn build_trust_router(runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
         .route("/readyz", get(readyz))
         .route("/metrics", get(metrics))
         .layer(Extension(runtime))
+        .layer(Extension(rate_limiter))
+        .layer(Extension(csrf_protection))
 }
 
 #[axum::debug_handler]
 async fn check_trust(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
+    Extension(rate_limiter): Extension<Arc<RateLimiter>>,
+    Extension(csrf_protection): Extension<Arc<CSRFProtection>>,
+    headers: HeaderMap,
     Json(req): Json<TrustCheckRequest>,
 ) -> Result<Json<TrustCheckResponse>, (StatusCode, String)> {
+    // Rate limiting check
+    let client_id = headers.get("x-forwarded-for")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("unknown");
+    
+    if !rate_limiter.check_rate_limit(client_id).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {}", e)))? {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+    }
+    
+    // CSRF protection check
+    if let Some(csrf_token) = headers.get("x-csrf-token") {
+        if let Ok(token) = csrf_token.to_str() {
+            if !csrf_protection.validate_token(&req.session_id, token).await {
+                return Err((StatusCode::FORBIDDEN, "Invalid CSRF token".to_string()));
+            }
+        }
+    }
+    
     // Validate input
     let validator = InputValidator::new();
     if let Err(e) = validator.validate_trust_request(&crate::input_validator::TrustCheckRequest {
@@ -154,8 +190,31 @@ async fn check_trust(
 #[axum::debug_handler]
 async fn register_extension_api(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
+    Extension(rate_limiter): Extension<Arc<RateLimiter>>,
+    Extension(csrf_protection): Extension<Arc<CSRFProtection>>,
+    headers: HeaderMap,
     Json(req): Json<ExtensionRegisterRequest>,
 ) -> Result<Json<ExtensionRegisterResponse>, (StatusCode, String)> {
+    // Rate limiting check
+    let client_id = headers.get("x-forwarded-for")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("unknown");
+    
+    if !rate_limiter.check_rate_limit(client_id).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {}", e)))? {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+    }
+    
+    // CSRF protection check
+    if let Some(csrf_token) = headers.get("x-csrf-token") {
+        if let Ok(token) = csrf_token.to_str() {
+            // For extension registration, we'll use the name as session ID
+            if !csrf_protection.validate_token(&req.name, token).await {
+                return Err((StatusCode::FORBIDDEN, "Invalid CSRF token".to_string()));
+            }
+        }
+    }
+    
     // Input validation using the validator
     let validator = InputValidator::new();
     if let Err(e) = validator.validate_extension_registration(&crate::input_validator::ExtensionRegisterRequest {

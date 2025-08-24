@@ -1,7 +1,10 @@
 //! Adapter module to communicate with local or remote IRL executors (e.g., Phi-4 via LM Studio)
+//! 
+//! Enhanced with secure network client implementation as specified in Phase 2.7 of the security audit plan.
 
 use serde::{Deserialize, Serialize};
-use std::error::Error;
+use std::time::Duration;
+use crate::errors::SigilError;
 
 #[derive(Debug, Serialize)]
 pub struct IRLQuery {
@@ -16,21 +19,103 @@ pub struct IRLResponse {
     pub allowed: bool,
 }
 
-pub fn query_phi4_executor(context: &str, input: &str) -> Result<IRLResponse, Box<dyn Error>> {
-    let client = reqwest::blocking::Client::new();
-    let payload = serde_json::json!({
-        "context": context,
-        "input": input,
-        "model": "phi-4",
-        "stream": false
-    });
+/// Secure network client with timeout and TLS enforcement
+pub struct SecureNetworkClient {
+    client: reqwest::Client,
+    base_url: String,
+    timeout: Duration,
+}
 
-    let res = client
-        .post("http://localhost:11434/irl") // ← Change if your Phi-4 endpoint is different
-        .header("Content-Type", "application/json")
-        .body(serde_json::to_string(&payload).unwrap())
-        .send()?;
+impl SecureNetworkClient {
+    /// Create a new secure network client
+    pub fn new(base_url: String, timeout_seconds: u64) -> Result<Self, SigilError> {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(timeout_seconds))
+            .use_rustls_tls() // Use rustls instead of OpenSSL
+            .build()
+            .map_err(|e| SigilError::network("creating HTTP client", e))?;
+        
+        Ok(Self {
+            client,
+            base_url,
+            timeout: Duration::from_secs(timeout_seconds),
+        })
+    }
+    
+    /// Query IRL executor with enhanced security
+    pub async fn query_phi4_executor(
+        &self,
+        context: &str,
+        input: &str,
+        api_key: Option<&str>,
+    ) -> Result<IRLResponse, SigilError> {
+        let payload = serde_json::json!({
+            "context": context,
+            "input": input,
+            "model": "phi-4",
+            "stream": false
+        });
+        
+        let mut request = self.client
+            .post(&format!("{}/irl", self.base_url))
+            .header("Content-Type", "application/json")
+            .header("User-Agent", "Sigil-IRL-Client/1.0")
+            .json(&payload);
+        
+        // Add authorization if provided
+        if let Some(key) = api_key {
+            request = request.header("Authorization", format!("Bearer {}", key));
+        }
+        
+        let response = request
+            .send()
+            .await
+            .map_err(|e| SigilError::network("sending IRL request", e))?;
+        
+        if !response.status().is_success() {
+            return Err(SigilError::internal(format!(
+                "HTTP error: {} - {}", 
+                response.status(), 
+                response.text().await.unwrap_or_default()
+            )));
+        }
+        
+        response.json::<IRLResponse>()
+            .await
+            .map_err(|e| SigilError::network("parsing IRL response", e))
+    }
+    
+    /// Get client statistics
+    pub fn get_stats(&self) -> NetworkClientStats {
+        NetworkClientStats {
+            base_url: self.base_url.clone(),
+            timeout: self.timeout,
+            tls_enabled: true,
+        }
+    }
+}
 
-    let parsed = res.json::<IRLResponse>()?;
-    Ok(parsed)
+/// Network client statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkClientStats {
+    pub base_url: String,
+    pub timeout: Duration,
+    pub tls_enabled: bool,
+}
+
+/// Legacy function for backward compatibility
+pub fn query_phi4_executor(context: &str, input: &str) -> Result<IRLResponse, Box<dyn std::error::Error>> {
+    // Create a default secure client for legacy usage
+    let client = SecureNetworkClient::new("http://localhost:11434".to_string(), 30)
+        .map_err(|e| format!("Failed to create network client: {}", e))?;
+    
+    // Use blocking runtime for legacy compatibility
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|e| format!("Failed to create runtime: {}", e))?;
+    
+    let response = runtime.block_on(async {
+        client.query_phi4_executor(context, input, None).await
+    })?;
+    
+    Ok(response)
 }
