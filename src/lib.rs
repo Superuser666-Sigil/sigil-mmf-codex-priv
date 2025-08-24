@@ -25,6 +25,7 @@ pub mod loa;
 pub mod policy_model;
 pub mod trust_registry;
 pub mod trusted_knowledge;
+pub mod secure_audit_chain;
 
 // License & seal tools
 pub mod key_manager;
@@ -55,6 +56,7 @@ pub mod irl_versioning;
 pub mod cli;
 pub mod config;
 pub mod config_loader;
+pub mod config_security;
 pub mod sigilctl;
 
 // Web server interface
@@ -77,6 +79,7 @@ pub mod platform_optimizations;
 // Security protections
 pub mod rate_limiter;
 pub mod csrf_protection;
+pub mod secure_file_ops;
 
 // Encryption & integrity
 pub mod sigil_encrypt;

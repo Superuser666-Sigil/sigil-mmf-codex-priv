@@ -1,6 +1,6 @@
 # sigil_license.toml
 # Sigil Protocol v1.0 — Canonical License File
-# NOTE: This example assumes the license is tied to a specific Canon, runtime instance, and LOA/Level of Authorization
+# NOTE: This example assumes the license is tied to a specific Canon, runtime instance, and LOA/Level of Authorization; it is only an example
 
 [license]
 id = "sigil-license-9876e4bc"

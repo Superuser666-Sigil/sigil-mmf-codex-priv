@@ -1,6 +1,7 @@
 use crate::errors::{SafeLock, SigilError, SigilResult};
 use crate::loa::LOA;
 use crate::log_sink::LogEvent;
+use crate::secure_audit_chain::{SecureAuditChain, ImmutableAuditStore};
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
@@ -12,6 +13,7 @@ use std::sync::Mutex;
 lazy_static! {
     static ref AUDIT_LOG: Mutex<Vec<AuditEvent>> = Mutex::new(Vec::new());
     static ref API_EVENTS: Mutex<HashMap<String, u32>> = Mutex::new(HashMap::new());
+    static ref SECURE_AUDIT_STORE: Mutex<Option<ImmutableAuditStore>> = Mutex::new(None);
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -198,6 +200,69 @@ pub fn get_api_event_stats() -> HashMap<String, u32> {
         Err(e) => {
             error!("Failed to acquire API events lock for statistics: {e}");
             HashMap::new()
+        }
+    }
+}
+
+/// Initialize secure audit store with cryptographic integrity
+pub fn init_secure_audit_store(storage_path: String, signing_key: ed25519_dalek::SigningKey) -> SigilResult<()> {
+    match SECURE_AUDIT_STORE.safe_lock() {
+        Ok(mut store) => {
+            let audit_store = ImmutableAuditStore::new(storage_path, signing_key);
+            *store = Some(audit_store);
+            info!("Secure audit store initialized with cryptographic integrity");
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to acquire secure audit store lock: {e}");
+            Err(SigilError::audit("Failed to initialize secure audit store"))
+        }
+    }
+}
+
+/// Write audit event to secure audit chain
+pub fn write_secure_audit_event(event: &AuditEvent, signing_key: &ed25519_dalek::SigningKey) -> SigilResult<()> {
+    // Convert AuditEvent to AuditData for secure chain
+    let audit_data = crate::secure_audit_chain::AuditData {
+        user_id: event.who.clone(),
+        action: event.action.clone(),
+        resource: event.target.clone().unwrap_or_default(),
+        session_id: event.session_id.clone(),
+        loa: format!("{:?}", event.loa),
+        metadata: {
+            let mut meta = std::collections::HashMap::new();
+            meta.insert("severity".to_string(), format!("{:?}", event.severity));
+            meta.insert("ephemeral".to_string(), event.ephemeral.to_string());
+            meta.insert("timestamp".to_string(), event.timestamp.to_rfc3339());
+            meta
+        },
+    };
+    
+    match SECURE_AUDIT_STORE.safe_lock() {
+        Ok(store) => {
+            if let Some(ref audit_store) = *store {
+                // Create secure audit chain entry
+                let chain = SecureAuditChain::create_chain(
+                    audit_data,
+                    &[], // No parent chains for individual events
+                    signing_key
+                ).map_err(|e| SigilError::audit(format!("Failed to create secure audit chain: {}", e)))?;
+                
+                // Store in immutable audit log
+                audit_store.write_chain(&chain)
+                    .map_err(|e| SigilError::audit(format!("Failed to store secure audit chain: {}", e)))?;
+                
+                info!("Audit event written to secure audit chain");
+                Ok(())
+            } else {
+                // Fall back to regular audit logging if secure store not initialized
+                warn!("Secure audit store not initialized, falling back to regular logging");
+                event.write_to_log()
+            }
+        }
+        Err(e) => {
+            error!("Failed to acquire secure audit store lock: {e}");
+            Err(SigilError::audit("Failed to write secure audit event"))
         }
     }
 }

@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use std::sync::{Arc, RwLock};
+use crate::secure_file_ops::SecureFileOperations;
 
 /// Helper function to find a key file in secure locations
 fn find_key_file(key_id: &str) -> Option<String> {
@@ -326,9 +327,30 @@ pub fn dispatch(cli: Cli) {
                         println!("Signature: {signature}");
 
                         if let Some(output_path) = output {
-                            match std::fs::write(&output_path, signature) {
-                                Ok(_) => println!("💾 Signature saved to: {output_path}"),
-                                Err(e) => eprintln!("❌ Failed to save signature: {e}"),
+                            // Use secure file operations
+                            let secure_file_ops = SecureFileOperations::new(
+                                vec![std::env::current_dir().unwrap().to_string_lossy().to_string()],
+                                1024 * 1024 // 1MB max
+                            );
+                            
+                            match secure_file_ops {
+                                Ok(ops) => {
+                                    match ops.write_file_secure(
+                                        std::path::Path::new(&output_path),
+                                        signature.as_bytes()
+                                    ) {
+                                        Ok(_) => println!("💾 Signature saved securely to: {output_path}"),
+                                        Err(e) => eprintln!("❌ Failed to save signature securely: {e}"),
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("❌ Failed to initialize secure file operations: {e}");
+                                    // Fall back to regular file write
+                                    match std::fs::write(&output_path, signature) {
+                                        Ok(_) => println!("💾 Signature saved to: {output_path}"),
+                                        Err(e) => eprintln!("❌ Failed to save signature: {e}"),
+                                    }
+                                }
                             }
                         }
                     }
