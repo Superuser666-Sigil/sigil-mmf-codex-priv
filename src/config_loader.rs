@@ -67,7 +67,7 @@ struct MMFConfigDefaults {
     trust: TrustConfig,
 }
 
-pub fn load_config() -> Result<MMFConfig, figment::Error> {
+pub fn load_config() -> Result<MMFConfig, Box<figment::Error>> {
     let figment = Figment::from(Serialized::defaults(MMFConfigDefaults {
         db_backend: "sled".into(),
         irl: IRLConfig::default(),
@@ -79,7 +79,7 @@ pub fn load_config() -> Result<MMFConfig, figment::Error> {
     let config: MMFConfig = figment.extract()?;
 
     if config.license_secret.trim().is_empty() {
-        return Err(figment::Error::from("license_secret must be set"));
+        return Err(Box::new(figment::Error::from("license_secret must be set")));
     }
 
     Ok(config)

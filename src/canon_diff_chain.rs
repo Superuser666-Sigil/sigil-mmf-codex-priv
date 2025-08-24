@@ -46,12 +46,11 @@ pub fn diff_by_id(id: &str) -> Result<HashMap<String, String>, String> {
                 .map_err(|e| format!("Failed to parse backup JSON: {e}"))?;
 
             let mut nodes = Vec::new();
-            if let Some(entries) = json.get("entries") {
-                if let Some(entries_array) = entries.as_array() {
-                    for entry in entries_array {
-                        if let Ok(node) = CanonNode::from_json(entry) {
-                            nodes.push(node);
-                        }
+            if let Some(entries) = json.get("entries")
+                && let Some(entries_array) = entries.as_array() {
+                for entry in entries_array {
+                    if let Ok(node) = CanonNode::from_json(entry) {
+                        nodes.push(node);
                     }
                 }
             }

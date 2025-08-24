@@ -61,10 +61,9 @@ impl InputValidator {
         }
         
         // Validate target if present
-        if let Some(target) = &req.target {
-            if !self.allowed_targets.contains(target) {
-                return Err(crate::errors::SigilError::validation("target", "Invalid target"));
-            }
+        if let Some(target) = &req.target
+            && !self.allowed_targets.contains(target) {
+            return Err(crate::errors::SigilError::validation("target", "Invalid target"));
         }
         
         // Validate session ID
@@ -84,7 +83,7 @@ impl InputValidator {
         // Check for potential injection patterns
         if self.contains_injection_patterns(&req.who) || 
            self.contains_injection_patterns(&req.action) ||
-           req.target.as_ref().map_or(false, |t| self.contains_injection_patterns(t)) {
+           req.target.as_ref().is_some_and(|t| self.contains_injection_patterns(t)) {
             return Err(crate::errors::SigilError::validation("input", "Potential injection detected"));
         }
         

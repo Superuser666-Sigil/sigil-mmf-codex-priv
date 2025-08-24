@@ -27,30 +27,29 @@ pub struct SigilVault {
 impl SigilVault {
     pub fn new(path: &str) -> Self {
         let mut memory = HashMap::new();
-        if Path::new(path).exists() {
-            if let Ok(mut file) = File::open(path) {
-                let key_opt = std::env::var("SIGIL_AES_KEY")
-                    .ok()
-                    .and_then(|k| decode_base64_key(&k).ok());
+        if Path::new(path).exists()
+            && let Ok(mut file) = File::open(path) {
+            let key_opt = std::env::var("SIGIL_AES_KEY")
+                .ok()
+                .and_then(|k| decode_base64_key(&k).ok());
 
-                let mut raw = Vec::new();
-                if file.read_to_end(&mut raw).is_ok() {
-                    let decrypted = if let Some(key) = key_opt {
-                        if raw.len() >= 12 {
-                            let (nonce_bytes, ciphertext) = raw.split_at(12);
-                            let nonce: [u8; 12] = nonce_bytes.try_into().unwrap();
-                            decrypt(ciphertext, &key, &nonce).unwrap_or_else(|_| vec![])
-                        } else {
-                            vec![]
-                        }
+            let mut raw = Vec::new();
+            if file.read_to_end(&mut raw).is_ok() {
+                let decrypted = if let Some(key) = key_opt {
+                    if raw.len() >= 12 {
+                        let (nonce_bytes, ciphertext) = raw.split_at(12);
+                        let nonce: [u8; 12] = nonce_bytes.try_into().unwrap();
+                        decrypt(ciphertext, &key, &nonce).unwrap_or_else(|_| vec![])
                     } else {
-                        raw
-                    };
-                    if let Ok(loaded) = serde_json::from_slice::<Vec<VaultMemoryBlock>>(&decrypted)
-                    {
-                        for block in loaded {
-                            memory.insert(block.id.clone(), block);
-                        }
+                        vec![]
+                    }
+                } else {
+                    raw
+                };
+                if let Ok(loaded) = serde_json::from_slice::<Vec<VaultMemoryBlock>>(&decrypted)
+                {
+                    for block in loaded {
+                        memory.insert(block.id.clone(), block);
                     }
                 }
             }
@@ -88,12 +87,11 @@ impl SigilVault {
     }
 
     pub fn soft_delete(&mut self, id: &str, session_id: &str) -> bool {
-        if let Some(block) = self.memory.get_mut(id) {
-            if block.session_id == session_id && !block.deleted {
-                block.deleted = true;
-                self.persist().ok(); // Fail silently
-                return true;
-            }
+        if let Some(block) = self.memory.get_mut(id)
+            && block.session_id == session_id && !block.deleted {
+            block.deleted = true;
+            self.persist().ok(); // Fail silently
+            return true;
         }
         false
     }

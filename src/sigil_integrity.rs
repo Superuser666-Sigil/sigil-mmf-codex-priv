@@ -194,7 +194,7 @@ pub fn create_witness_signature(
 mod tests {
     use super::*;
     use ed25519_dalek::SigningKey;
-    use rand::rngs::OsRng;
+    // OsRng is used in the test below
     
     #[test]
     fn test_witness_validation() {

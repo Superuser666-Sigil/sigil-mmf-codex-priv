@@ -201,14 +201,10 @@ impl SigilRuntimeCore {
             // Parse content as JSON if it's a string
             if let Ok(content_json) =
                 serde_json::from_str::<serde_json::Value>(&threshold_entry.content)
-            {
-                if let Some(threshold_value) =
+                && let Some(threshold_value) =
                     content_json.as_object().and_then(|obj| obj.get("value"))
-                {
-                    if let Some(threshold) = threshold_value.as_f64() {
-                        self.threshold = threshold;
-                    }
-                }
+                && let Some(threshold) = threshold_value.as_f64() {
+                self.threshold = threshold;
             }
         }
 
