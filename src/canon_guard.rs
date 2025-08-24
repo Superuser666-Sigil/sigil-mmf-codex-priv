@@ -101,7 +101,7 @@ fn extract_verdict_from_frozen_chain(chain: &FrozenChain) -> Result<Verdict, Str
 /// Analyze reasoning text to determine verdict score
 fn analyze_reasoning_for_verdict(reasoning_text: &str) -> f64 {
     let text = reasoning_text.to_lowercase();
-    let mut score = 0.5; // Neutral starting point
+    let mut score: f64 = 0.5; // Neutral starting point
     
     // Positive indicators
     let positive_keywords = [
@@ -143,7 +143,7 @@ fn analyze_reasoning_for_verdict(reasoning_text: &str) -> f64 {
     }
     
     // Clamp score between 0.0 and 1.0
-    if score < 0.0 { 0.0 } else if score > 1.0 { 1.0 } else { score }
+    score.clamp(0.0, 1.0)
 }
 
 /// Validate witnesses for a FrozenChain
