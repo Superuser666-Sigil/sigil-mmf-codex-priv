@@ -246,11 +246,11 @@ pub fn write_secure_audit_event(event: &AuditEvent, signing_key: &ed25519_dalek:
                     audit_data,
                     &[], // No parent chains for individual events
                     signing_key
-                ).map_err(|e| SigilError::audit(format!("Failed to create secure audit chain: {}", e)))?;
+                ).map_err(|e| SigilError::audit(format!("Failed to create secure audit chain: {e}")))?;
                 
                 // Store in immutable audit log
                 audit_store.write_chain(&chain)
-                    .map_err(|e| SigilError::audit(format!("Failed to store secure audit chain: {}", e)))?;
+                    .map_err(|e| SigilError::audit(format!("Failed to store secure audit chain: {e}")))?;
                 
                 info!("Audit event written to secure audit chain");
                 Ok(())

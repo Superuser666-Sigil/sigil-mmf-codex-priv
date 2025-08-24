@@ -46,7 +46,7 @@ impl SecureAuditChain {
         
         // Hash the audit data
         let data_json = serde_json::to_string(&audit_data)
-            .map_err(|e| format!("Failed to serialize audit data: {}", e))?;
+            .map_err(|e| format!("Failed to serialize audit data: {e}"))?;
         hasher.update(data_json.as_bytes());
         
         // Include parent hashes in content hash for chain integrity
@@ -81,7 +81,7 @@ impl SecureAuditChain {
         let signature_data = format!("{}:{}:{}", self.content_hash, self.merkle_root, 
             self.timestamp.timestamp());
         let signature_bytes = base64::engine::general_purpose::STANDARD.decode(&self.signature)
-            .map_err(|e| format!("Invalid signature encoding: {}", e))?;
+            .map_err(|e| format!("Invalid signature encoding: {e}"))?;
         if signature_bytes.len() != 64 {
             return Err("Invalid signature length".to_string());
         }
@@ -91,7 +91,7 @@ impl SecureAuditChain {
         
         verifying_key.verify(signature_data.as_bytes(), &signature)
             .map(|_| true)
-            .map_err(|e| format!("Signature verification failed: {}", e))
+            .map_err(|e| format!("Signature verification failed: {e}"))
     }
     
     /// Verify the content hash matches the audit data
@@ -100,7 +100,7 @@ impl SecureAuditChain {
         
         // Hash the audit data
         let data_json = serde_json::to_string(&self.audit_data)
-            .map_err(|e| format!("Failed to serialize audit data: {}", e))?;
+            .map_err(|e| format!("Failed to serialize audit data: {e}"))?;
         hasher.update(data_json.as_bytes());
         
         // Include parent hashes
@@ -121,7 +121,7 @@ impl SecureAuditChain {
         
         // Hash audit data
         let data_json = serde_json::to_string(audit_data)
-            .map_err(|e| format!("Failed to serialize audit data: {}", e))?;
+            .map_err(|e| format!("Failed to serialize audit data: {e}"))?;
         hasher.update(data_json.as_bytes());
         
         // Hash parent chain hashes
@@ -179,13 +179,13 @@ impl ImmutableAuditStore {
             .create(true)
             .append(true)
             .open(&self.storage_path)
-            .map_err(|e| format!("Failed to open audit log: {}", e))?;
+            .map_err(|e| format!("Failed to open audit log: {e}"))?;
         
         let json = serde_json::to_string(chain)
-            .map_err(|e| format!("Failed to serialize chain: {}", e))?;
+            .map_err(|e| format!("Failed to serialize chain: {e}"))?;
         
-        writeln!(file, "{}", json)
-            .map_err(|e| format!("Failed to write chain: {}", e))?;
+        writeln!(file, "{json}")
+            .map_err(|e| format!("Failed to write chain: {e}"))?;
         
         Ok(())
     }
@@ -193,19 +193,19 @@ impl ImmutableAuditStore {
     /// Read all audit chains from the store
     pub fn read_all_chains(&self) -> Result<Vec<SecureAuditChain>, String> {
         let file = File::open(&self.storage_path)
-            .map_err(|e| format!("Failed to open audit log: {}", e))?;
+            .map_err(|e| format!("Failed to open audit log: {e}"))?;
         
         let reader = BufReader::new(file);
         let mut chains = Vec::new();
         
         for line in reader.lines() {
-            let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
+            let line = line.map_err(|e| format!("Failed to read line: {e}"))?;
             if line.trim().is_empty() {
                 continue;
             }
             
             let chain: SecureAuditChain = serde_json::from_str(&line)
-                .map_err(|e| format!("Failed to parse chain: {}", e))?;
+                .map_err(|e| format!("Failed to parse chain: {e}"))?;
             
             // Verify integrity of each chain
             if !chain.verify_integrity(&self.verifying_key)? {

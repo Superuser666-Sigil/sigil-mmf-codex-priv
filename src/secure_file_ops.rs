@@ -55,7 +55,7 @@ impl SecureFileOperations {
         
         if !is_allowed {
             return Err(SigilError::validation("path", 
-                format!("Path {} is not in allowed directories", path_str)));
+                format!("Path {path_str} is not in allowed directories")));
         }
         
         // Check file extension if present
@@ -63,7 +63,7 @@ impl SecureFileOperations {
             let ext_str = extension.to_string_lossy().to_lowercase();
             if !self.allowed_extensions.contains(&ext_str.to_string()) {
                 return Err(SigilError::validation("path", 
-                    format!("File extension '{}' not allowed", ext_str)));
+                    format!("File extension '{ext_str}' not allowed")));
             }
         }
         
@@ -219,7 +219,7 @@ pub struct FileOpsStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+
     use tempfile::tempdir;
     
     #[test]

@@ -104,7 +104,7 @@ async fn check_trust(
         .unwrap_or("unknown");
     
     if !rate_limiter.check_rate_limit(client_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {}", e)))? {
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
         return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
     }
     
@@ -126,7 +126,7 @@ async fn check_trust(
         session_id: req.session_id.clone(),
         loa: req.loa.clone(),
     }) {
-        return Err((StatusCode::BAD_REQUEST, format!("Input validation failed: {}", e)));
+        return Err((StatusCode::BAD_REQUEST, format!("Input validation failed: {e}")));
     }
     
     // increment metric
@@ -135,7 +135,7 @@ async fn check_trust(
         counter.inc();
     }
     let runtime = runtime.read().map_err(|e| {
-        error!("Runtime read lock poisoned: {}", e);
+        error!("Runtime read lock poisoned: {e}");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "runtime lock poisoned".to_string(),
@@ -201,7 +201,7 @@ async fn register_extension_api(
         .unwrap_or("unknown");
     
     if !rate_limiter.check_rate_limit(client_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {}", e)))? {
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
         return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
     }
     
@@ -221,7 +221,7 @@ async fn register_extension_api(
         name: req.name.clone(),
         loa: req.loa.clone(),
     }) {
-        return Err((StatusCode::BAD_REQUEST, format!("Input validation failed: {}", e)));
+        return Err((StatusCode::BAD_REQUEST, format!("Input validation failed: {e}")));
     }
     
     let _loa = match LOA::from_str(&req.loa) {
@@ -232,7 +232,7 @@ async fn register_extension_api(
     };
     // Optionally use runtime if needed (for consistency)
     let _runtime = runtime.read().map_err(|e| {
-        error!("Runtime read lock poisoned: {}", e);
+        error!("Runtime read lock poisoned: {e}");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "runtime lock poisoned".to_string(),
@@ -255,7 +255,7 @@ async fn trust_status(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let runtime = runtime.read().map_err(|e| {
-        error!("Runtime read lock poisoned: {}", e);
+        error!("Runtime read lock poisoned: {e}");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "runtime lock poisoned".to_string(),
@@ -272,7 +272,7 @@ async fn readyz(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let runtime = runtime.read().map_err(|e| {
-        error!("Runtime read lock poisoned: {}", e);
+        error!("Runtime read lock poisoned: {e}");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "runtime lock poisoned".to_string(),

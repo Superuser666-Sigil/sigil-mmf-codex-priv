@@ -23,6 +23,12 @@ pub struct DatabaseAccessControl {
     audit_log: Arc<Mutex<Vec<DatabaseAuditEvent>>>,
 }
 
+impl Default for DatabaseAccessControl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DatabaseAccessControl {
     pub fn new() -> Self {
         Self {
@@ -71,7 +77,7 @@ pub struct CanonStoreSled {
 impl CanonStoreSled {
     pub fn new(path: &str, encryption_key: &[u8; 32]) -> Result<Self, String> {
         let db = sled::open(path)
-            .map_err(|e| format!("Failed to open sled database: {}", e))?;
+            .map_err(|e| format!("Failed to open sled database: {e}"))?;
         
         // Verify encryption key is set
         if encryption_key.iter().all(|&b| b == 0) {
@@ -90,13 +96,13 @@ impl CanonStoreSled {
         use rand::RngCore;
         
         let cipher = Aes256Gcm::new_from_slice(&self.encryption_key)
-            .map_err(|e| format!("Invalid encryption key: {}", e))?;
+            .map_err(|e| format!("Invalid encryption key: {e}"))?;
         
         let mut nonce = [0u8; 12];
         rand::thread_rng().fill_bytes(&mut nonce);
         
         let encrypted = cipher.encrypt(&nonce.into(), data)
-            .map_err(|e| format!("Encryption failed: {}", e))?;
+            .map_err(|e| format!("Encryption failed: {e}"))?;
         
         let mut result = nonce.to_vec();
         result.extend_from_slice(&encrypted);
@@ -111,13 +117,13 @@ impl CanonStoreSled {
         }
         
         let cipher = Aes256Gcm::new_from_slice(&self.encryption_key)
-            .map_err(|e| format!("Invalid encryption key: {}", e))?;
+            .map_err(|e| format!("Invalid encryption key: {e}"))?;
         
         let nonce = &encrypted_data[..12];
         let data = &encrypted_data[12..];
         
         cipher.decrypt(nonce.into(), data)
-            .map_err(|e| format!("Decryption failed: {}", e))
+            .map_err(|e| format!("Decryption failed: {e}"))
     }
 }
 
@@ -128,7 +134,7 @@ impl CanonStore for CanonStoreSled {
         }
 
         // Log access attempt
-        let user_id = format!("loa_{:?}", loa);
+        let user_id = format!("loa_{loa:?}");
         self.access_control.log_operation(&user_id, "read", key, true);
 
         self.db.get(key).ok().flatten().and_then(|ivec| {
@@ -152,7 +158,7 @@ impl CanonStore for CanonStoreSled {
         }
 
         // Log write attempt
-        let user_id = format!("loa_{:?}", loa);
+        let user_id = format!("loa_{loa:?}");
         self.access_control.log_operation(&user_id, "write", &entry.id, true);
 
         let serialized = serde_json::to_vec(&entry).map_err(|_| "Serialization failed")?;

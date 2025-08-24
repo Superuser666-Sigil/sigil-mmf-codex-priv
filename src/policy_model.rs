@@ -15,7 +15,7 @@ impl PolicyModel {
     /// along with a boolean decision. The logic here is intentionally simple
     /// so that it can be audited easily.
     pub fn evaluate(context: &str, input: &str) -> (String, f32, bool) {
-        let combined = format!("{} {}", context, input).to_lowercase();
+        let combined = format!("{context} {input}").to_lowercase();
         // Basic keyword based policy for demonstration purposes.
         let score = if combined.contains("hack") || combined.contains("deny") {
             0.0

@@ -57,14 +57,14 @@ impl SecureNetworkClient {
         });
         
         let mut request = self.client
-            .post(&format!("{}/irl", self.base_url))
+            .post(format!("{}/irl", self.base_url))
             .header("Content-Type", "application/json")
             .header("User-Agent", "Sigil-IRL-Client/1.0")
             .json(&payload);
         
         // Add authorization if provided
         if let Some(key) = api_key {
-            request = request.header("Authorization", format!("Bearer {}", key));
+            request = request.header("Authorization", format!("Bearer {key}"));
         }
         
         let response = request
@@ -107,11 +107,11 @@ pub struct NetworkClientStats {
 pub fn query_phi4_executor(context: &str, input: &str) -> Result<IRLResponse, Box<dyn std::error::Error>> {
     // Create a default secure client for legacy usage
     let client = SecureNetworkClient::new("http://localhost:11434".to_string(), 30)
-        .map_err(|e| format!("Failed to create network client: {}", e))?;
+        .map_err(|e| format!("Failed to create network client: {e}"))?;
     
     // Use blocking runtime for legacy compatibility
     let runtime = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {}", e))?;
+        .map_err(|e| format!("Failed to create runtime: {e}"))?;
     
     let response = runtime.block_on(async {
         client.query_phi4_executor(context, input, None).await

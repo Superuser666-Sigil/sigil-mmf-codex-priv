@@ -98,7 +98,7 @@ pub fn load_config() -> Result<MMFConfig, Box<figment::Error>> {
 pub fn load_secure_config(master_key: &str) -> Result<MMFConfig, Box<figment::Error>> {
     // Create secure config instance
     let secure_config = SecureConfig::new(master_key)
-        .map_err(|e| Box::new(figment::Error::from(format!("Secure config initialization failed: {}", e))))?;
+        .map_err(|e| Box::new(figment::Error::from(format!("Secure config initialization failed: {e}"))))?;
     
     // Try to load encrypted config first
     if let Ok(config) = secure_config.load_encrypted::<MMFConfig>("mmf.encrypted.toml") {
