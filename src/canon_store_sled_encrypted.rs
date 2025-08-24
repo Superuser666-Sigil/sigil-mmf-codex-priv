@@ -11,9 +11,10 @@ pub struct CanonStoreSled {
 }
 
 impl CanonStoreSled {
-    pub fn new(path: &str) -> Self {
-        let db = sled::open(path).expect("Failed to open sled database");
-        Self { db }
+    pub fn new(path: &str) -> Result<Self, String> {
+        let db = sled::open(path)
+            .map_err(|e| format!("Failed to open sled database: {}", e))?;
+        Ok(Self { db })
     }
 }
 

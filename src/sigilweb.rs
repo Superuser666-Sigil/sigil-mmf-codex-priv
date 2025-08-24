@@ -1,6 +1,7 @@
 use crate::audit::AuditEvent;
 use crate::loa::LOA;
 use crate::sigil_runtime_core::SigilRuntimeCore;
+use crate::input_validator::InputValidator;
 use axum::{
     Router,
     extract::Extension,
@@ -80,6 +81,18 @@ async fn check_trust(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
     Json(req): Json<TrustCheckRequest>,
 ) -> Result<Json<TrustCheckResponse>, (StatusCode, String)> {
+    // Validate input
+    let validator = InputValidator::new();
+    if let Err(e) = validator.validate_trust_request(&crate::input_validator::TrustCheckRequest {
+        who: req.who.clone(),
+        action: req.action.clone(),
+        target: req.target.clone(),
+        session_id: req.session_id.clone(),
+        loa: req.loa.clone(),
+    }) {
+        return Err((StatusCode::BAD_REQUEST, format!("Input validation failed: {}", e)));
+    }
+    
     // increment metric
     init_metrics();
     if let Some(counter) = TRUST_CHECK_TOTAL.get() {
@@ -143,11 +156,16 @@ async fn register_extension_api(
     Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
     Json(req): Json<ExtensionRegisterRequest>,
 ) -> Result<Json<ExtensionRegisterResponse>, (StatusCode, String)> {
-    // Input validation
-    if req.name.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "Extension name cannot be empty".to_string()));
+    // Input validation using the validator
+    let validator = InputValidator::new();
+    if let Err(e) = validator.validate_extension_registration(&crate::input_validator::ExtensionRegisterRequest {
+        name: req.name.clone(),
+        loa: req.loa.clone(),
+    }) {
+        return Err((StatusCode::BAD_REQUEST, format!("Input validation failed: {}", e)));
     }
-    let loa = match LOA::from_str(&req.loa) {
+    
+    let _loa = match LOA::from_str(&req.loa) {
         Ok(loa) => loa,
         Err(_) => {
             return Err((StatusCode::BAD_REQUEST, format!("Invalid LOA: {}", req.loa)));
@@ -212,7 +230,11 @@ static TRUST_CHECK_TOTAL: OnceLock<IntCounter> = OnceLock::new();
 fn init_metrics() {
     let registry = METRICS_REGISTRY.get_or_init(Registry::new);
     let counter = TRUST_CHECK_TOTAL.get_or_init(|| {
-        IntCounter::new("trust_check_total", "Total trust check requests").expect("counter")
+        IntCounter::new("trust_check_total", "Total trust check requests")
+            .unwrap_or_else(|_| {
+                error!("Failed to create trust check counter");
+                IntCounter::new("trust_check_total_fallback", "Fallback counter").unwrap()
+            })
     });
     let _ = registry.register(Box::new(counter.clone()));
 }
