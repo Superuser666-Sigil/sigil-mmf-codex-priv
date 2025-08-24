@@ -1,26 +1,30 @@
 use aes_gcm::aead::generic_array::GenericArray;
 use aes_gcm::{
-    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit},
 };
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
+use rand::TryRngCore;
+use rand::rngs::OsRng;
 
-pub fn encrypt(data: &[u8], key: &[u8]) -> Result<Vec<u8>, &'static str> {
+pub fn encrypt(data: &[u8], key: &[u8]) -> Result<(Vec<u8>, [u8; 12]), &'static str> {
     let key = GenericArray::from_slice(key);
     let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::from_slice(b"unique nonce"); // 96-bits; unique per message
+    let mut nonce_bytes = [0u8; 12];
+    let mut rng = OsRng;
+    rng.try_fill_bytes(&mut nonce_bytes)
+        .map_err(|_| "nonce generation failed")?;
     let ciphertext = cipher
-        .encrypt(nonce, data)
+        .encrypt(Nonce::from_slice(&nonce_bytes), data)
         .map_err(|_| "encryption failed")?;
-    Ok(ciphertext)
+    Ok((ciphertext, nonce_bytes))
 }
 
-pub fn decrypt(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, &'static str> {
+pub fn decrypt(ciphertext: &[u8], key: &[u8], nonce: &[u8; 12]) -> Result<Vec<u8>, &'static str> {
     let key = GenericArray::from_slice(key);
     let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::from_slice(b"unique nonce");
     let plaintext = cipher
-        .decrypt(nonce, ciphertext)
+        .decrypt(Nonce::from_slice(nonce), ciphertext)
         .map_err(|_| "decryption failed")?;
     Ok(plaintext)
 }

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -35,7 +36,13 @@ impl SigilVault {
                 let mut raw = Vec::new();
                 if file.read_to_end(&mut raw).is_ok() {
                     let decrypted = if let Some(key) = key_opt {
-                        decrypt(&raw, &key).unwrap_or_else(|_| vec![])
+                        if raw.len() >= 12 {
+                            let (nonce_bytes, ciphertext) = raw.split_at(12);
+                            let nonce: [u8; 12] = nonce_bytes.try_into().unwrap();
+                            decrypt(ciphertext, &key, &nonce).unwrap_or_else(|_| vec![])
+                        } else {
+                            vec![]
+                        }
                     } else {
                         raw
                     };
@@ -105,7 +112,10 @@ impl SigilVault {
 
         let serialized = serde_json::to_vec(&vec).map_err(|_| "Serialization error")?;
         let encrypted = if let Some(key) = key_opt {
-            encrypt(&serialized, &key).map_err(|_| "Encryption error")?
+            let (ciphertext, nonce) = encrypt(&serialized, &key).map_err(|_| "Encryption error")?;
+            let mut out = nonce.to_vec();
+            out.extend_from_slice(&ciphertext);
+            out
         } else {
             serialized
         };
