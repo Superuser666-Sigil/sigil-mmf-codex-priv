@@ -1,10 +1,12 @@
-// module_loader.rs - Integrates canon validation during module load
+// module_loader.rs - Module loading and execution with LOA enforcement
 
 use std::fs;
 use std::path::Path;
 use toml::Value;
 use tracing::{error, info, warn};
 use thiserror::Error;
+use crate::loa::LOA;
+use crate::errors::SigilResult;
 
 #[derive(Error, Debug)]
 pub enum ModuleLoaderError {
@@ -20,6 +22,71 @@ pub fn load_module_manifest(path: &Path) -> Result<Value, Box<dyn std::error::Er
     let raw = fs::read_to_string(path)?;
     let module: Value = toml::from_str(&raw)?;
     Ok(module)
+}
+
+/// SigilModule trait for secure module execution
+pub trait SigilModule {
+    fn required_loa(&self) -> LOA;
+    fn run(&self, ctx: &ModuleContext) -> SigilResult<String>;
+}
+
+/// Module execution context
+pub struct ModuleContext {
+    pub session_id: String,
+    pub user_id: String,
+    pub loa: LOA,
+    pub input: String,
+}
+
+/// Module registry for managing loaded modules
+pub struct ModuleRegistry {
+    modules: std::collections::HashMap<String, Box<dyn SigilModule + Send + Sync>>,
+}
+
+impl ModuleRegistry {
+    pub fn new() -> Self {
+        Self {
+            modules: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn register_module(&mut self, name: &str, module: Box<dyn SigilModule + Send + Sync>) {
+        self.modules.insert(name.to_string(), module);
+        info!("Registered module: {}", name);
+    }
+
+    pub fn get_module(&self, name: &str) -> Option<&Box<dyn SigilModule + Send + Sync>> {
+        self.modules.get(name)
+    }
+
+    pub fn run_module(&self, name: &str, ctx: &ModuleContext) -> SigilResult<String> {
+        let module = self.get_module(name)
+            .ok_or_else(|| crate::errors::SigilError::not_found("module", name))?;
+        
+        // Check LOA requirement
+        if ctx.loa < module.required_loa() {
+            return Err(crate::errors::SigilError::insufficient_loa(
+                "run_module",
+                &format!("Module {} requires {:?}, got {:?}", name, module.required_loa(), ctx.loa)
+            ));
+        }
+        
+        module.run(ctx)
+    }
+}
+
+/// Built-in hello module for testing
+pub struct HelloModule;
+
+impl SigilModule for HelloModule {
+    fn required_loa(&self) -> LOA {
+        LOA::Operator
+    }
+
+    fn run(&self, ctx: &ModuleContext) -> SigilResult<String> {
+        Ok(format!("Hello from Sigil! Session: {}, User: {}, LOA: {:?}", 
+                   ctx.session_id, ctx.user_id, ctx.loa))
+    }
 }
 
 pub fn load_and_run_modules(ctx: &crate::session_context::SessionContext) -> Result<(), ModuleLoaderError> {

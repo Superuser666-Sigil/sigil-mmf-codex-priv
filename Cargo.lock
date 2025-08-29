@@ -1949,10 +1949,12 @@ dependencies = [
  "ed25519-dalek",
  "figment",
  "getrandom 0.3.3",
+ "hex",
  "lazy_static",
  "log",
  "prometheus",
  "rand 0.8.5",
+ "rand_core 0.6.4",
  "regex",
  "reqwest",
  "serde",
@@ -2870,7 +2872,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

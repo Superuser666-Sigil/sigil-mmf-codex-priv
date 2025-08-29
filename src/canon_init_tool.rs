@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::audit::AuditEvent;
 use crate::canon_store::CanonStore;
 use crate::canon_store_sled::CanonStoreSled;
+use crate::canonical_record::CanonicalRecord;
 use crate::config_loader::load_config;
 use crate::loa::LOA;
 use crate::session_context::SessionContext;
@@ -35,7 +36,9 @@ pub fn run_loader(file_path: &str, license_token: &str) -> Result<(), String> {
         CanonStoreSled::new("data/canon").map_err(|_| "Failed to create canon store")?;
 
     for mut entry in entries {
+        // Force verdict to Allow for imported entries
         entry.verdict = SigilVerdict::Allow;
+        // Build an audit event for logging
         let audit = AuditEvent::new(
             "canon_init_tool",
             "canon_init",
@@ -45,9 +48,13 @@ pub fn run_loader(file_path: &str, license_token: &str) -> Result<(), String> {
         );
         audit.write_to_log().ok();
 
+        // Convert to canonical record with tenant "system" and space "system"
+        let record = CanonicalRecord::from_trusted_entry(&entry, "system", "system", 1)
+            .map_err(|e| format!("Failed to create canonical record: {e}"))?;
+
         store
-            .add_entry(entry, &session.loa, config.trust.allow_operator_canon_write)
-            .map_err(|e| format!("Canon entry write failed: {e}"))?;
+            .add_record(record, &session.loa, config.trust.allow_operator_canon_write)
+            .map_err(|e| format!("Canon record write failed: {e}"))?;
     }
 
     println!("[SigilInit] Canon entries loaded successfully.");

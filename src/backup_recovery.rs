@@ -3,6 +3,7 @@ use crate::canon_store_sled::CanonStoreSled;
 use crate::loa::LOA;
 use crate::sigil_vault::VaultMemoryBlock;
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
+use crate::canonical_record::CanonicalRecord;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
@@ -28,9 +29,18 @@ pub fn restore_from_snapshot(
         serde_json::from_str(&contents).map_err(|_| "Snapshot format invalid")?;
 
     for entry in snapshot.canon {
-        canon_store
-            .add_entry(entry, &LOA::Root, allow_operator)
-            .ok();
+        // Convert each trusted entry to a canonical record; use system namespace
+        match CanonicalRecord::from_trusted_entry(&entry, "system", "system", 1) {
+            Ok(record) => {
+                canon_store
+                    .add_record(record, &LOA::Root, allow_operator)
+                    .ok();
+            }
+            Err(e) => {
+                // Log conversion failure but continue
+                println!("[Recovery] Failed to convert entry {}: {e}", entry.id);
+            }
+        }
     }
 
     println!("[Recovery] Canon restored successfully.");

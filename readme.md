@@ -1,209 +1,125 @@
-# Sigil: Trustworthy AI Runtime Framework
+# Sigil / MMF / Codex Nexus -- Honest README (Prototype)
 
-Sigil is a Rust-based framework for building trustworthy AI systems through runtime enforcement of transparency, access control, and audit trails. Built on the principle that **"a piece of output that cannot explain itself has no trust"** (Rule Zero), Sigil provides cryptographic guarantees around AI behavior and decision-making.
+This repository is a **prototype** of a threelayer system:
 
-## Architecture Overview
+- **Sigil (runtime kernel)** -- enforces Levels of Access (LOA), validates requests, evaluates trust, records signed audits, and mediates all access to Canon/Codex.
+- **Codex Nexus (Canon datastore)** -- encrypted KV store for audit records (FrozenChains), user/session memories, and operatorprovided RAG documents.
+- **MMF (interaction layer)** -- thin UI/API that *must* call Sigil; it does not touch Codex directly.
 
-Sigil implements a comprehensive trust infrastructure through several key components:
+> This README reflects the **actual** current state of the code, not the original vision doc. Features are grouped as Implemented / Partial / Not Implemented so you can plan realistically.
 
-### Core Systems
-- **LOA (Level of Access)**: Hierarchical access control with cryptographic attestation (`Guest → Observer → Operator → Mentor → Root`)
-- **Two-Phase Reasoning**: Mutable reasoning chains that freeze into immutable audit records
-- **Canon Storage**: Versioned, validated truth storage with multiple backends (Sled, encrypted Sled, Codex Nexus)
-- **IRL Trust Scoring**: Inverse Reinforcement Learning for behavioral trust evaluation
+---
 
-### Security & Compliance
-- **License Validation**: Cryptographic license enforcement with expiration and scope controls
-- **Audit Chain**: Immutable audit trails with cryptographic integrity verification
-- **Session Management**: Secure context tracking and permission enforcement
+## Current status (truthful)
 
-## Getting Started
+###  Implemented
+- **Encrypted Canon storage (Sled + AESGCM)**  
+  All values written encrypted; `list_entries()` now decrypts before deserializing to JSON (fixes prior integrity bug).
+- **Defaultdeny security posture**  
+  Trust evaluation failures return a deny instead of allowing by default.
+- **Ed25519 signatures for _ReasoningChain_**  
+  Reasoning chains are hashed (SHA256) and signed with Ed25519; verification rehashes and verifies the signature.
+- **Quorum framework (systemspace writes)**  
+  A `SystemProposal` type, witness registry scaffolding, and signature collection logic exist (kofn threshold).
+- **Module trait + LOA requirement (scaffold)**  
+  A `SigilModule` trait with `required_loa()` / `run()` exists and a simple example module is defined.
 
-### Prerequisites
-- Rust 1.70+ (stable-x86_64-pc-windows-msvc recommended for Windows)
-- Cargo (latest stable)
+###  Partial / Prototype
+- **FrozenChain integrity**  
+  Currently still stores a toy `"sig_<16 chars of hash>"` signature. The chain **does not** yet carry Ed25519 signatures endtoend. Integrity checks recompute content/Merkle hashes but skip real signature verification.
+- **Trust model**  
+  A real 5feature **logistic model** exists (`trust_linear.rs`) with tests, but **is not wired into the runtime**; the runtime still uses a simple keyword policy in places or a stub evaluator.
+- **Witness quorum enforcement**  
+  Proposal/signature collection is present, but commits don't yet *require* verified witness signatures endtoend (no blocking checks in audit/canon commit paths).
+- **Module runtime**  
+  Manifests are parsed and logged; the sample module is not actually loaded/executed from the runtime entrypoints.
 
-### Building
+###  Not Implemented
+- **Inverse Reinforcement Learning (IRL)**, **knowledge distillation**, **ONNX import/export** -- not present beyond placeholders/stubs.
+- **Real CDC / projections** to SQL/NoSQL; no queue/topic emitting canonical records for downstream projections.
+- **Full web UI / MMF** -- only thin HTTP stubs; no production UI.
+
+---
+
+## Architecture at a glance
+
+```
+MMF (UI) HTTP> Sigil (runtime) > Canon/Codex (encrypted KV)
+                          
+                           Trust model (planned: logistic  IRL later)
+                           Audit: ReasoningChain  FrozenChain (signed)
+                           Quorum: kofn witnesses for systemspace
+```
+
+- **All nontrivial operations must be mediated by Sigil.**  
+  MMF never writes Codex directly.
+- **Appendonly audit mindset.**  
+  Mutations produce new versions; deletes are tombstones.
+
+---
+
+## Canonical "Rosetta Stone" JSON (what downstreams map from)
+
+> The project includes a `CanonicalRecord` type (see `src/canonical_record.rs`) intended as the single, portable schema emitted for every committed object. This is the basis for projecting into SQL/NoSQL/search engines.
+
+**Fields (v1):**
+```json
+{
+  "kind": "frozen_chain | memory_block | rag_doc",
+  "schema_version": 1,
+  "id": "ULID/UUID",
+  "tenant": "org-or-user",
+  "ts": "RFC3339",
+  "space": "user | system",
+  "payload": { "...type-specific..." },
+  "links": [{ "rel": "parent", "id": "..." }],
+  "prev": "id-or-null",
+  "hash": "sha256(canonical-plaintext)",
+  "sig": "ed25519(base64)",
+  "pub_key": "ed25519-pk(base64)",
+  "witnesses": [{ "id": "w1", "sig": "..." }]
+}
+```
+
+**Canonicalization:** JSON keys are deterministically ordered before hashing/signing to ensure stable verification. (Production should adopt JCS or switch to CBOR for cryptographic canonicalization.)
+
+---
+
+## Running (prototype)
+
 ```bash
-# Clean build
-cargo clean
-cargo build --release
-
-# Development build
+# Build & test
 cargo build
-```
-
-### Basic Usage
-```bash
-# Check system status
-cargo run --bin mmf_sigil -- whoami
-
-# Train a neural network model
-cargo run --bin trainer -- --model-type unified --mode trust
-
-# Train relational architecture
-cargo run --bin trainer -- --model-type relational --mode trust
-
-# Initialize Canon storage
-cargo run --bin mmf_sigil -- canon-init --backend sled
-```
-
-## Current Implementation Status
-
-### ✅ **Fully Implemented & Working**
-- **Access Control**: Complete LOA system with role-based permissions
-- **Audit System**: Two-phase reasoning chains with cryptographic verification
-- **Canon Storage**: Multi-backend persistence with validation
-- **License Framework**: Cryptographic license validation and enforcement
-- **CLI Interface**: Comprehensive command-line tools
-- **Neural Network Training**: Working training pipeline using Candle framework
-- **Cross-Platform Key Management**: OS-agnostic secure key storage
-- **Model Export**: Basic model saving functionality
-
-### 🚧 **Partially Implemented**
-- **IRL Training Pipeline**: Framework exists but needs real data integration
-- **Model Loading**: ONNX model import and inference integration
-- **Web Interface**: REST API and dashboard (scaffold implemented)
-- **Teacher Model Integration**: Knowledge distillation framework ready
-
-### 📋 **Planned**
-- **Real Data Integration**: Replace synthetic data with actual SigilDERG data
-- **Semantic Validation**: Natural language coherence checking for Canon mutations
-- **Ethics Enforcement**: Runtime ethical constraint validation
-- **Distributed Canon**: Multi-node canonical storage with consensus
-
-## Key Features
-
-### Trust-First Architecture
-- Every output includes provenance and reasoning traces
-- Cryptographic audit trails prevent tampering
-- Access controls enforce principle of least privilege
-
-### Neural Network Training
-```bash
-# Train unified architecture
-cargo run --bin trainer -- --model-type unified --mode trust
-
-# Train relational architecture  
-cargo run --bin trainer -- --model-type relational --mode trust
-
-# Specify output path
-cargo run --bin trainer -- --model-type unified --output-path ./models/my_model.safetensors
-```
-
-**Current Training Features:**
-- ✅ **Candle Framework**: Stable ML framework (replaced problematic Burn)
-- ✅ **AdamW Optimizer**: Working gradient descent with proper parameter updates
-- ✅ **MSE Loss**: Mean squared error loss calculation
-- ✅ **Model Saving**: Models saved to `./models/` directory
-- ✅ **CLI Interface**: Full command-line argument parsing
-
-**Training Data:**
-- Currently using synthetic random data for testing
-- Ready for integration with real SigilDERG data
-- Supports both unified and relational architectures
-
-### Canon Management
-```bash
-# Add validated knowledge to Canon
-cargo run --bin mmf_sigil -- canon-add --file knowledge.jsonl
-
-# Query Canon with audit trail
-cargo run --bin mmf_sigil -- canon-query --pattern "user_behavior"
-```
-
-## Technical Stack
-
-### Core Framework
-- **Language**: Rust 2021 edition
-- **ML Framework**: Candle (Hugging Face) - stable, production-ready
-- **ONNX Support**: Tract-ONNX for model import/export
-- **Storage**: Sled for embedded databases
-- **Cryptography**: ed25519-dalek, AES-GCM, SHA2
-
-### Dependencies
-- **Web Framework**: Axum for REST APIs
-- **CLI**: Clap for command-line interface
-- **Serialization**: Serde for JSON/TOML handling
-- **Async Runtime**: Tokio for async operations
-- **Logging**: Tracing for structured logging
-
-## Recent Major Changes
-
-### Migration from Burn to Candle
-- **Problem**: Burn 0.18.0 had persistent optimizer and trait bound issues
-- **Solution**: Migrated to Candle 0.9.1 (Hugging Face framework)
-- **Benefits**: 
-  - ✅ Stable, production-ready ML framework
-  - ✅ Working optimizers and gradient descent
-  - ✅ Better documentation and community support
-  - ✅ Cross-platform compatibility
-
-### Cross-Platform Improvements
-- **Key Management**: OS-agnostic secure directory handling
-- **File Paths**: Platform-independent path resolution
-- **Error Messages**: Cross-platform error reporting
-
-## License & Governance
-
-Sigil operates under the **MMF Codex License** framework, which requires:
-- Valid cryptographic licenses for runtime operation
-- Compliance with canonical knowledge constraints
-- Audit trail maintenance for all system modifications
-
-See `MMF-CL_v1.1.md` for complete license terms.
-
-## Development
-
-### Project Structure
-```
-src/
-├── bin/
-│   └── trainer.rs          # Neural network training binary
-├── main.rs                 # Main CLI application
-├── lib.rs                  # Core library
-├── cli.rs                  # Command-line interface
-├── key_manager.rs          # Cross-platform key management
-├── canon_store.rs          # Canon storage backends
-├── audit_chain.rs          # Audit trail system
-├── loa.rs                  # Level of Access control
-├── license_validator.rs    # License validation
-└── ...                     # Additional modules
-```
-
-### Testing
-```bash
-# Run all tests
 cargo test
 
-# Run specific test module
-cargo test --test license
-
-# Check compilation
-cargo check --bin trainer
-cargo check --bin mmf_sigil
+# Run (example binary if provided)
+cargo run
 ```
 
-### Documentation
-```bash
-# Generate and open documentation
-cargo doc --open
+> Expect stub outputs in several paths. The system is **not** productionsafe yet.
 
-# Generate documentation for specific crate
-cargo doc --package candle-nn --open
-```
+---
 
-## Contributing
+## Security notes (read before demoing)
 
-Sigil is designed for mission-critical applications requiring verifiable trustworthiness. Contributions must maintain the framework's core principles:
+- **Do not** claim endtoend tamperevident audits until `FrozenChain` is signed/verified with Ed25519.
+- **Do not** claim IRL/distillation/ONNX support. These are not implemented.
+- Keep **defaultdeny** behavior intact; errors must not produce "allowed=true."
 
-1. **Transparency**: All behavior must be explainable and auditable
-2. **Access Control**: Changes must respect LOA hierarchy
-3. **Immutability**: Audit trails and frozen reasoning chains cannot be modified
-4. **Cross-Platform**: Code must work on Windows, Linux, and macOS
+---
 
-## Contact
+## Roadmap (high level)
 
-For technical questions or collaboration opportunities regarding the Sigil framework, please review the documentation and implementation before reaching out.
+1. Wire logistic trust model into Sigil runtime; remove keyword stub.
+2. Propagate Ed25519 signatures to `FrozenChain`; verify on read.
+3. Enforce witness quorum in commit paths.
+4. Adopt JCS/CBOR for canonicalization; emit CanonicalRecord for all writes.
+5. Add CDC emitter + SQL/NoSQL mappers; replay to rebuild projections.
+6. Execute at least one real module behind LOA; sandbox and log output.
+7. E2E test suite covering allow/deny, tamper, quorum, and projections.
+8. Honest README stays synchronized with tests; CI blocks unverifiable claims.
 
-**Keywords**: trustworthy AI, runtime verification, access control, audit trails, Rust, Candle, IRL, transparency, neural networks, machine learning
+---
+
+## License / policy
+See repository license files. This README deliberately avoids aspirational claims; only tested, verifiable behavior is listed here.

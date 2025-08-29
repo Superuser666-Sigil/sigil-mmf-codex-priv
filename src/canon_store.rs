@@ -1,19 +1,28 @@
 use crate::loa::LOA;
-use crate::trusted_knowledge::TrustedKnowledgeEntry;
+use crate::canonical_record::CanonicalRecord;
 use crate::secure_file_ops::SecureFileOperations;
 use serde_json::Value;
 
 pub trait CanonStore: Send + Sync {
-    fn load_entry(&self, key: &str, loa: &LOA) -> Option<TrustedKnowledgeEntry>;
+    /// Load a canonical record by key.  Returns None if the caller's LOA
+    /// does not meet the record's loa_required or if the record is not found.
+    fn load_record(&self, key: &str, loa: &LOA) -> Option<CanonicalRecord>;
 
-    fn add_entry(
+    /// Add a canonical record to the store.  The caller must have
+    /// sufficient LOA to write to the target namespace.  The
+    /// `allow_operator_write` flag permits Operator LOA to write into
+    /// system space when true.
+    fn add_record(
         &mut self,
-        entry: TrustedKnowledgeEntry,
+        record: CanonicalRecord,
         loa: &LOA,
         allow_operator_write: bool,
     ) -> Result<(), &'static str>;
 
-    fn list_entries(&self, category: Option<&str>, loa: &LOA) -> Vec<TrustedKnowledgeEntry>;
+    /// List canonical records filtered by kind.  Returns an empty list if
+    /// the caller lacks read permissions.  If kind is None, all
+    /// records visible to the caller are returned.
+    fn list_records(&self, kind: Option<&str>, loa: &LOA) -> Vec<CanonicalRecord>;
 }
 
 pub fn revert_node(id: &str, to_hash: &str) -> Result<(), String> {

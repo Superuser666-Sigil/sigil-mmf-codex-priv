@@ -1,6 +1,6 @@
 use crate::canon_store::CanonStore;
 use crate::loa::{LOA, can_read_canon, can_write_canon};
-use crate::trusted_knowledge::TrustedKnowledgeEntry;
+use crate::canonical_record::CanonicalRecord;
 use serde_json;
 use sled::Db;
 use std::collections::HashMap;
@@ -128,61 +128,56 @@ impl CanonStoreSled {
 }
 
 impl CanonStore for CanonStoreSled {
-    fn load_entry(&self, key: &str, loa: &LOA) -> Option<TrustedKnowledgeEntry> {
+    fn load_record(&self, key: &str, loa: &LOA) -> Option<CanonicalRecord> {
         if !can_read_canon(loa) {
             return None;
         }
-
         // Log access attempt
         let user_id = format!("loa_{loa:?}");
         self.access_control.log_operation(&user_id, "read", key, true);
-
         self.db.get(key).ok().flatten().and_then(|ivec| {
-            // Use new encryption method
             let data = match self.decrypt_data(&ivec) {
                 Ok(decrypted) => decrypted,
-                Err(_) => ivec.to_vec(), // Fallback to unencrypted
+                Err(_) => ivec.to_vec(),
             };
-            serde_json::from_slice::<TrustedKnowledgeEntry>(&data).ok()
+            serde_json::from_slice::<CanonicalRecord>(&data).ok()
         })
     }
 
-    fn add_entry(
+    fn add_record(
         &mut self,
-        entry: TrustedKnowledgeEntry,
+        record: CanonicalRecord,
         loa: &LOA,
         _allow_operator_write: bool,
     ) -> Result<(), &'static str> {
         if !can_write_canon(loa) {
-            return Err("Insufficient LOA to write canon entry");
+            return Err("Insufficient LOA to write canon record");
         }
-
-        // Log write attempt
         let user_id = format!("loa_{loa:?}");
-        self.access_control.log_operation(&user_id, "write", &entry.id, true);
-
-        let serialized = serde_json::to_vec(&entry).map_err(|_| "Serialization failed")?;
-        
-        // Always encrypt data for security
+        self.access_control.log_operation(&user_id, "write", &record.id, true);
+        let serialized = serde_json::to_vec(&record).map_err(|_| "Serialization failed")?;
         let encrypted = self.encrypt_data(&serialized)
             .map_err(|_| "Canon encryption failed")?;
-
         self.db
-            .insert(entry.id.as_str(), encrypted)
+            .insert(record.id.as_str(), encrypted)
             .map_err(|_| "Write failed")?;
         Ok(())
     }
 
-    fn list_entries(&self, category: Option<&str>, loa: &LOA) -> Vec<TrustedKnowledgeEntry> {
+    fn list_records(&self, kind: Option<&str>, loa: &LOA) -> Vec<CanonicalRecord> {
         if !can_read_canon(loa) {
             return vec![];
         }
-
         self.db
             .iter()
             .filter_map(|item| item.ok())
-            .filter_map(|(_, val)| serde_json::from_slice::<TrustedKnowledgeEntry>(&val).ok())
-            .filter(|entry| category.is_none_or(|cat| entry.category == cat))
+            .filter_map(|(_, val)| {
+                match self.decrypt_data(&val) {
+                    Ok(decrypted) => serde_json::from_slice::<CanonicalRecord>(&decrypted).ok(),
+                    Err(_) => serde_json::from_slice::<CanonicalRecord>(&val).ok(),
+                }
+            })
+            .filter(|record| kind.is_none() || kind.map(|k| record.kind == k).unwrap_or(false))
             .collect()
     }
 }

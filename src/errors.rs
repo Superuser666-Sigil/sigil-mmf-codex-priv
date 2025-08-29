@@ -191,6 +191,29 @@ impl SigilError {
             message: message.into(),
         }
     }
+
+    /// Create an insufficient LOA error
+    pub fn insufficient_loa(_operation: impl Into<String>, _message: impl Into<String>) -> Self {
+        Self::InsufficientLoa { 
+            required: LOA::Root, // Default to highest requirement
+            actual: LOA::Guest,  // Default to lowest level
+        }
+    }
+
+    /// Create a not found error
+    pub fn not_found(resource: impl Into<String>, id: impl Into<String>) -> Self {
+        Self::Internal {
+            message: format!("{} not found: {}", resource.into(), id.into()),
+        }
+    }
+
+    /// Create an invalid input error
+    pub fn invalid_input(operation: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::Validation {
+            field: operation.into(),
+            message: message.into(),
+        }
+    }
 }
 
 /// Helper trait for safe mutex operations
@@ -264,6 +287,13 @@ impl From<std::io::Error> for SigilError {
 impl From<reqwest::Error> for SigilError {
     fn from(err: reqwest::Error) -> Self {
         SigilError::network("http_request", err)
+    }
+}
+
+/// Convert from String errors
+impl From<String> for SigilError {
+    fn from(err: String) -> Self {
+        SigilError::Internal { message: err }
     }
 }
 

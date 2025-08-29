@@ -22,10 +22,13 @@ pub mod audit_store;
 pub mod audit_verifier;
 pub mod elevation_verifier;
 pub mod loa;
-pub mod policy_model;
 pub mod trust_registry;
 pub mod trusted_knowledge;
 pub mod secure_audit_chain;
+
+// New security and trust modules
+pub mod trust_linear;
+pub mod quorum_system;
 
 // License & seal tools
 pub mod key_manager;
@@ -88,11 +91,21 @@ pub mod sigil_integrity;
 pub mod sigil_vault;
 pub mod sigil_vault_encrypted;
 
+// Canonical record representation for Codex Nexus
+pub mod canonical_record;
+
 // Logging
 pub mod log_sink;
 
 // Protocol definitions
 pub mod proto;
+
+#[cfg(test)]
+mod tests {
+    pub mod audit_chain_test;
+    pub mod canon_store;
+    pub mod security_tests;
+}
 
 // Re-export key types for the two-phase ReasoningChain -> FrozenChain approach
 pub use audit_chain::{
