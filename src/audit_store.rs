@@ -1,4 +1,5 @@
 use crate::audit_chain::{FrozenChain, ReasoningChain};
+use crate::canonical_record::CanonicalRecord;
 use serde_json;
 use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{BufWriter, Write};
@@ -27,7 +28,16 @@ impl AuditStore {
     }
 
     /// Store a ReasoningChain (mutable process) - for debugging and development
+    /// Now wrapped in CanonicalRecord as per Track C1
     pub fn write_reasoning_chain(&self, chain: &ReasoningChain) -> Result<(), String> {
+        // Wrap ReasoningChain in CanonicalRecord
+        let canonical_record = CanonicalRecord::from_reasoning_chain(
+            chain, 
+            "system",  // ReasoningChains are system-generated
+            "audit",   // audit space
+            None       // no previous record for now
+        )?;
+
         let file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -35,24 +45,33 @@ impl AuditStore {
             .map_err(|e| format!("Failed to open reasoning log: {e}"))?;
 
         let mut writer = BufWriter::new(file);
-        let json = serde_json::to_string(chain)
-            .map_err(|e| format!("Failed to serialize reasoning chain: {e}"))?;
+        let json = serde_json::to_string(&canonical_record)
+            .map_err(|e| format!("Failed to serialize canonical record: {e}"))?;
 
-        writeln!(writer, "{json}").map_err(|e| format!("Failed to write reasoning chain: {e}"))?;
+        writeln!(writer, "{json}").map_err(|e| format!("Failed to write canonical record: {e}"))?;
 
         writer
             .flush()
-            .map_err(|e| format!("Failed to flush reasoning chain: {e}"))?;
+            .map_err(|e| format!("Failed to flush canonical record: {e}"))?;
 
         Ok(())
     }
 
     /// Store a FrozenChain (immutable record) - for production and audit trails
+    /// Now wrapped in CanonicalRecord as per Track C1
     pub fn write_frozen_chain(&self, chain: &FrozenChain) -> Result<(), String> {
         // Verify integrity before storing
         if !chain.verify_integrity()? {
             return Err("Cannot store FrozenChain with invalid integrity".into());
         }
+
+        // Wrap FrozenChain in CanonicalRecord
+        let canonical_record = CanonicalRecord::from_frozen_chain(
+            chain, 
+            "system",  // FrozenChains are system-generated
+            "audit",   // audit space
+            None       // no previous record for now
+        )?;
 
         let file = OpenOptions::new()
             .create(true)
@@ -61,14 +80,14 @@ impl AuditStore {
             .map_err(|e| format!("Failed to open frozen chain log: {e}"))?;
 
         let mut writer = BufWriter::new(file);
-        let json = serde_json::to_string(chain)
-            .map_err(|e| format!("Failed to serialize frozen chain: {e}"))?;
+        let json = serde_json::to_string(&canonical_record)
+            .map_err(|e| format!("Failed to serialize canonical record: {e}"))?;
 
-        writeln!(writer, "{json}").map_err(|e| format!("Failed to write frozen chain: {e}"))?;
+        writeln!(writer, "{json}").map_err(|e| format!("Failed to write canonical record: {e}"))?;
 
         writer
             .flush()
-            .map_err(|e| format!("Failed to flush frozen chain: {e}"))?;
+            .map_err(|e| format!("Failed to flush canonical record: {e}"))?;
 
         Ok(())
     }
@@ -88,7 +107,7 @@ impl AuditStore {
         Ok(frozen_chain)
     }
 
-    /// Retrieve a FrozenChain by ID
+    /// Retrieve a FrozenChain by ID (unwraps from CanonicalRecord)
     pub fn get_frozen_chain(&self, chain_id: &str) -> Result<Option<FrozenChain>, String> {
         let file = File::open(&self.frozen_chain_path)
             .map_err(|e| format!("Failed to open frozen chain log: {e}"))?;
@@ -98,10 +117,14 @@ impl AuditStore {
 
         for line in lines {
             let line = line.map_err(|e| format!("Failed to read line: {e}"))?;
-            let chain: FrozenChain = serde_json::from_str(&line)
-                .map_err(|e| format!("Failed to parse frozen chain: {e}"))?;
+            let canonical_record: CanonicalRecord = serde_json::from_str(&line)
+                .map_err(|e| format!("Failed to parse canonical record: {e}"))?;
 
-            if chain.chain_id == chain_id {
+            if canonical_record.id == chain_id && canonical_record.kind == "frozen_chain" {
+                // Extract FrozenChain from payload
+                let chain: FrozenChain = serde_json::from_value(canonical_record.payload)
+                    .map_err(|e| format!("Failed to extract FrozenChain from payload: {e}"))?;
+
                 // Verify integrity on retrieval
                 if !chain.verify_integrity()? {
                     return Err("Retrieved FrozenChain failed integrity verification".into());
@@ -134,7 +157,7 @@ impl AuditStore {
         Ok(chains)
     }
 
-    /// Verify the integrity of all stored FrozenChains
+    /// Verify the integrity of all stored FrozenChains (unwraps from CanonicalRecord)
     pub fn verify_all_integrity(&self) -> Result<Vec<String>, String> {
         let mut failed_chains = Vec::new();
         let file = File::open(&self.frozen_chain_path)
@@ -146,19 +169,32 @@ impl AuditStore {
         for (line_num, line) in lines.enumerate() {
             let line = line.map_err(|e| format!("Failed to read line {}: {}", line_num + 1, e))?;
 
-            match serde_json::from_str::<FrozenChain>(&line) {
-                Ok(chain) => {
-                    if !chain.verify_integrity()? {
-                        failed_chains.push(format!(
-                            "Chain {} at line {} failed integrity check",
-                            chain.chain_id,
-                            line_num + 1
-                        ));
+            match serde_json::from_str::<CanonicalRecord>(&line) {
+                Ok(canonical_record) => {
+                    if canonical_record.kind == "frozen_chain" {
+                        match serde_json::from_value::<FrozenChain>(canonical_record.payload) {
+                            Ok(chain) => {
+                                if !chain.verify_integrity()? {
+                                    failed_chains.push(format!(
+                                        "Chain {} at line {} failed integrity check",
+                                        chain.chain_id,
+                                        line_num + 1
+                                    ));
+                                }
+                            }
+                            Err(e) => {
+                                failed_chains.push(format!(
+                                    "Failed to extract FrozenChain from canonical record at line {}: {}",
+                                    line_num + 1,
+                                    e
+                                ));
+                            }
+                        }
                     }
                 }
                 Err(e) => {
                     failed_chains.push(format!(
-                        "Failed to parse chain at line {}: {}",
+                        "Failed to parse canonical record at line {}: {}",
                         line_num + 1,
                         e
                     ));

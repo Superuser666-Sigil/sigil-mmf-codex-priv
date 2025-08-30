@@ -193,10 +193,10 @@ impl SigilError {
     }
 
     /// Create an insufficient LOA error
-    pub fn insufficient_loa(_operation: impl Into<String>, _message: impl Into<String>) -> Self {
+    pub fn insufficient_loa(required: LOA, actual: LOA) -> Self {
         Self::InsufficientLoa { 
-            required: LOA::Root, // Default to highest requirement
-            actual: LOA::Guest,  // Default to lowest level
+            required,
+            actual,
         }
     }
 

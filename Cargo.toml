@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "trainer"
 path = "src/bin/trainer.rs"
 
+[[bin]]
+name = "canon_signer"
+path = "src/bin/canon_signer.rs"
+
 [dependencies]
 # Core dependencies
 serde = { version = "=1.0.219", features = ["derive"] }
@@ -55,6 +59,7 @@ figment = { version = "0.10", default-features = false, features = ["env", "toml
 
 # Logging
 log = "0.4"
+env_logger = "0.10"
 
 # Utilities
 lazy_static = "1.4"
@@ -86,3 +91,5 @@ web = []
 cli = []
 ml = []
 security = []
+# IRL features - disabled by default for logistic-only MVP
+irl = []

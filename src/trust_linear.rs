@@ -13,9 +13,9 @@ pub struct TrustWeights {
 impl Default for TrustWeights {
     fn default() -> Self {
         Self {
-            bias: -0.5,
-            weights: vec![0.2, 0.2, 0.2, 0.2, 0.2], // Equal weights for 5 features
-            threshold: 0.5,
+            bias: -0.8, // Balanced restrictive bias for security
+            weights: vec![0.15, 0.15, 0.4, 0.15, 0.15], // LOA gets double weight for privilege enforcement
+            threshold: 0.4, // Security threshold - Allow Operator+ for modules, deny Guest risky actions
         }
     }
 }
@@ -34,11 +34,13 @@ impl TrustFeatures {
     pub fn new(action: &str, target: Option<&str>, loa: &LOA, recent_requests: usize, input: &str) -> Self {
         // Action class risk scoring
         let action_class = match action.to_lowercase().as_str() {
-            "read" | "get" | "query" => 0.1,
-            "write" | "update" | "modify" => 0.6,
+            "read" | "get" | "query" | "canon_read" | "audit_read" | "config_read" => 0.1,
+            "write" | "update" | "modify" | "canon_write" | "config_write" => 0.6,
             "delete" | "remove" => 0.9,
-            "execute" | "run" => 0.7,
+            "execute" | "run" | "module_execute" => 0.4, // Module execution is lower risk for authenticated users
             "admin" | "system" => 0.95,
+            "trust_check" => 0.1, // Trust checks are low risk queries
+            "elevation_request" => 0.8, // LOA elevation is high risk
             _ => 0.5,
         };
 
@@ -49,6 +51,7 @@ impl TrustFeatures {
                 "canon" | "system" => 0.9,
                 "audit" | "log" => 0.8,
                 "config" | "settings" => 0.7,
+                "hello" | "module" => 0.2, // Built-in modules are low risk
                 _ => 0.5,
             },
             None => 0.5,

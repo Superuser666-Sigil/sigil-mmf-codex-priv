@@ -39,11 +39,7 @@ pub enum Commands {
         file: String,
     },
 
-    /// Train IRL models
-    IrlTrain {
-        #[arg(short, long)]
-        audit_log: Option<String>,
-    },
+
 
     /// Diff a Canon node by ID
     Diff {
@@ -109,6 +105,22 @@ pub enum Commands {
         #[arg(long)]
         signature: String,
     },
+
+    /// Generate a new license
+    GenerateLicense {
+        #[arg(long)]
+        owner_name: String,
+        #[arg(long)]
+        owner_email: String,
+        #[arg(long)]
+        loa: String, // "Guest", "Observer", "Operator", "Mentor", "Root"
+        #[arg(long)]
+        expires_days: Option<u32>, // Days from now, default 90
+        #[arg(long)]
+        signing_key_id: String,
+        #[arg(short, long)]
+        output: String,
+    },
 }
 
 pub fn dispatch(cli: Cli) {
@@ -137,9 +149,7 @@ pub fn dispatch(cli: Cli) {
                 Err(e) => eprintln!("Failed to load file: {e}"),
             }
         }
-        Commands::IrlTrain { audit_log } => {
-            crate::sigilirl::run_training_cli(audit_log);
-        }
+
         Commands::Diff { id } => match crate::canon_diff_chain::diff_by_id(&id) {
             Ok(diff) => println!("{diff:?}"),
             Err(e) => eprintln!("Diff failed: {e}"),
@@ -165,7 +175,7 @@ pub fn dispatch(cli: Cli) {
                 || -> Result<Arc<RwLock<crate::sigil_runtime_core::SigilRuntimeCore>>, String> {
                     use crate::canon_store_sled::CanonStoreSled;
                     use crate::config_loader::load_config;
-                    use crate::irl_modes::{EnforcementMode, IRLConfig as RuntimeIRLConfig};
+                    use crate::runtime_config::{EnforcementMode, RuntimeConfig as RuntimeIRLConfig};
                     use crate::loa::LOA;
                     use crate::sigil_runtime_core::SigilRuntimeCore;
                     use std::sync::Mutex;
@@ -194,14 +204,16 @@ pub fn dispatch(cli: Cli) {
                         .map_err(|e| format!("Failed to create canon store: {e}"))?;
                     let canon_store = Arc::new(Mutex::new(store));
 
-                    let mut runtime =
+                    let runtime =
                         SigilRuntimeCore::new(LOA::Observer, canon_store, runtime_cfg)
                             .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
 
                     // Respect telemetry/explainer flags
+                    #[cfg(feature = "irl")]
                     if app_cfg.irl.telemetry_enabled {
                         runtime.enable_telemetry();
                     }
+                    #[cfg(feature = "irl")]
                     if app_cfg.irl.explanation_enabled {
                         runtime.enable_explanation();
                     }
@@ -387,6 +399,156 @@ pub fn dispatch(cli: Cli) {
                 },
                 Err(e) => eprintln!("❌ Failed to load key pair: {e}"),
             }
+        }
+        Commands::GenerateLicense {
+            owner_name,
+            owner_email,
+            loa,
+            expires_days,
+            signing_key_id,
+            output,
+        } => {
+            generate_license_command(
+                &owner_name,
+                &owner_email,
+                &loa,
+                expires_days.unwrap_or(90),
+                &signing_key_id,
+                &output,
+            );
+        }
+    }
+}
+
+/// Generate a signed license file
+fn generate_license_command(
+    owner_name: &str,
+    owner_email: &str,
+    loa_str: &str,
+    expires_days: u32,
+    signing_key_id: &str,
+    output: &str,
+) {
+    use crate::loa::LOA;
+    use chrono::{Duration, Utc};
+    use std::fs;
+    use sha2::{Sha256, Digest};
+    use uuid::Uuid;
+    
+    // Parse LOA
+    let loa = match loa_str.to_lowercase().as_str() {
+        "guest" => LOA::Guest,
+        "observer" => LOA::Observer,
+        "operator" => LOA::Operator,
+        "mentor" => LOA::Mentor,
+        "root" => LOA::Root,
+        _ => {
+            eprintln!("❌ Invalid LOA: {loa_str}. Must be Guest, Observer, Operator, Mentor, or Root");
+            return;
+        }
+    };
+    
+    // Load signing key from disk using platform-appropriate paths  
+    use crate::key_manager::SigilKeyPair;
+    let home_dir = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME"))
+                    .unwrap_or_else(|_| ".".to_string());
+    let key_path = format!("{}/.sigil/keys/{}.json", home_dir, signing_key_id);
+    
+    let signing_key = match SigilKeyPair::load_from_file(&key_path) {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("❌ Signing key '{signing_key_id}' not found at: {}", key_path);
+            eprintln!("Generate one first with:");
+            eprintln!("   cargo run --bin mmf_sigil generate-key --key-id {signing_key_id} --key-type license");
+            return;
+        }
+    };
+    
+    let now = Utc::now();
+    let expires_at = now + Duration::days(expires_days as i64);
+    let license_id = format!("sigil-license-{}", Uuid::new_v4().simple());
+    
+    // Generate owner hash_id from email (deterministic but privacy-preserving)
+    let mut hasher = Sha256::new();
+    hasher.update(owner_email.as_bytes());
+    hasher.update(b"sigil-license-salt"); // Add salt to prevent rainbow tables
+    let hash_id = format!("{:x}", hasher.finalize())[..16].to_string();
+    
+    // Create license structure matching sigil_license.toml format
+    let license_toml = format!(
+        r#"# Sigil Protocol License File
+# Generated on {generated_at}
+# Valid from {issued_at} until {expires_at}
+
+[license]
+id = "{license_id}"
+issuedAt = "{issued_at}"
+expiresAt = "{expires_at}"
+loa = "{loa_name}"
+scope = ["canon:system", "module:builtin", "runtime:sigil"]
+issuer = "sigil_trust_v1"
+version = "1.0"
+
+[license.owner]
+name = "{owner_name}"
+mnemonic = "Generated-{short_id}"
+email = "{owner_email}"
+hashId = "{hash_id}"
+
+[license.bindings]
+canonFingerprint = "sha256:placeholder-will-be-computed-at-runtime"
+runtimeId = "sigil-runtime-{runtime_id}"
+
+[license.trust]
+trustModel = "sigil_trust_v1"
+signature = "ed25519:{signature_placeholder}"
+sealed = true
+
+[license.permissions]
+canMutateCanon = {can_mutate_canon}
+canOverrideAudit = {can_override_audit}
+canRegisterModule = {can_register_module}
+canElevateIdentity = {can_elevate_identity}
+
+[license.audit]
+lastVerified = "{issued_at}"
+verifier = "sigil-license-generator"
+canonicalized = true
+"#,
+        generated_at = now.format("%Y-%m-%d %H:%M:%S UTC"),
+        license_id = license_id,
+        issued_at = now.to_rfc3339(),
+        expires_at = expires_at.to_rfc3339(),
+        loa_name = format!("{:?}", loa),
+        owner_name = owner_name,
+        short_id = &hash_id[..8],
+        owner_email = owner_email,
+        hash_id = hash_id,
+        runtime_id = Uuid::new_v4().simple(),
+        signature_placeholder = "placeholder-will-be-computed",
+        can_mutate_canon = matches!(loa, LOA::Root | LOA::Mentor),
+        can_override_audit = matches!(loa, LOA::Root),
+        can_register_module = matches!(loa, LOA::Root | LOA::Mentor | LOA::Operator),
+        can_elevate_identity = matches!(loa, LOA::Root | LOA::Mentor),
+    );
+    
+    // TODO: Actually sign the license content with the signing key
+    // For now, we generate a valid structure that can be manually signed
+    
+    match fs::write(output, license_toml) {
+        Ok(()) => {
+            println!("✅ License generated: {output}");
+            println!("📋 License Details:");
+            println!("   Owner: {owner_name} <{owner_email}>");
+            println!("   LOA: {:?}", loa);
+            println!("   Valid until: {}", expires_at.format("%Y-%m-%d"));
+            println!("   License ID: {license_id}");
+            println!();
+            println!("⚠️  Note: License signature is placeholder. Manual signing required.");
+            println!("🔑 Public Key: {}", signing_key.public_key);
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to write license file: {e}");
         }
     }
 }

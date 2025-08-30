@@ -4,6 +4,7 @@ use crate::sigil_runtime_core::SigilRuntimeCore;
 use crate::input_validator::InputValidator;
 use crate::rate_limiter::RateLimiter;
 use crate::csrf_protection::CSRFProtection;
+use crate::module_loader::ModuleContext;
 use axum::{
     Router,
     extract::Extension,
@@ -11,7 +12,7 @@ use axum::{
     response::Json,
     routing::{get, post},
 };
-use log::error;
+use log::{error, info};
 use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -48,11 +49,11 @@ pub struct ExtensionRegisterResponse {
     error: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ModuleRunRequest {
-    input: String,
-    session_id: String,
-    user_id: String,
+    pub input: String,
+    pub session_id: String,
+    pub user_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -110,8 +111,8 @@ pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) 
         .route("/api/trust/check", post(check_trust))
         .route("/api/trust/status", get(trust_status))
         .route("/api/extensions/register", post(register_extension_api))
-        .route("/api/audit/:id", get(get_audit))
-        .route("/api/module/:name/run", post(run_module))
+        .route("/api/audit/{id}", get(get_audit))
+        .route("/api/module/{name}/run", post(run_module))
         .route("/api/canon/user/write", post(canon_user_write))
         .route("/api/canon/system/propose", post(canon_system_propose))
         .route("/api/canon/system/attest", post(canon_system_attest))
@@ -209,7 +210,7 @@ async fn check_trust(
     // Evaluate trust using the logistic model via the runtime.  This
     // call always succeeds; logistic evaluation uses the configured
     // model registry.  Score is a f64 and allowed is a boolean.
-    let (eval, allowed) = {
+    let (eval, allowed, actual_threshold) = {
         let runtime = runtime.read().map_err(|e| {
             error!("Runtime read lock poisoned: {e}");
             (
@@ -225,12 +226,12 @@ async fn check_trust(
                 false
             }
         };
-        (eval, allowed)
+        (eval, allowed, runtime.threshold)
     };
     // Use default threshold for logistic model; model_id is None for logistic
     let score = eval.score as f64;
     let model_id = None;
-    let threshold = Some(0.5); // Default logistic threshold
+    let threshold = Some(actual_threshold); // Use actual runtime threshold
     let error_msg = None;
     Ok(Json(TrustCheckResponse {
         allowed,
@@ -322,18 +323,9 @@ async fn healthz() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "ok" }))
 }
 
-async fn readyz(
-    Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let runtime = runtime.read().map_err(|e| {
-        error!("Runtime read lock poisoned: {e}");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "runtime lock poisoned".to_string(),
-        )
-    })?;
-    let ready = runtime.active_model_id.is_some();
-    Ok(Json(serde_json::json!({ "ready": ready })))
+async fn readyz() -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // In logistic-only MVP, always ready since builtin model is always available
+    Ok(Json(serde_json::json!({ "ready": true })))
 }
 
 // Simple Prometheus metrics endpoint using a global registry
@@ -426,8 +418,8 @@ async fn run_module(
     // Get recent requests count first
     let recent_requests = rate_limiter.get_request_count(client_id).await;
     
-    // Create audit event and evaluate trust
-    let (_event, evaluation) = {
+    // Create audit event and evaluate trust, then execute module
+    let module_result = {
         let runtime = runtime.read().map_err(|e| {
             error!("Runtime read lock poisoned: {e}");
             (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
@@ -442,17 +434,39 @@ async fn run_module(
         );
         
         let evaluation = runtime.evaluate_event(&event, recent_requests);
-        (event, evaluation)
+        
+        if !evaluation.allowed {
+            return Err((StatusCode::FORBIDDEN, "Module execution denied by trust evaluation".to_string()));
+        }
+        
+        // Create module execution context
+        let module_context = ModuleContext {
+            session_id: req.session_id.clone(),
+            user_id: req.user_id.clone(),
+            loa: runtime.loa.clone(),
+            input: req.input.clone(),
+        };
+        
+        // Execute the module through the registry
+        let module_registry = runtime.module_registry.lock().map_err(|e| {
+            error!("Module registry lock poisoned: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "module registry lock poisoned".to_string())
+        })?;
+        
+        module_registry.run_module(&module_name, &module_context)
+            .map_err(|e| match e {
+                crate::errors::SigilError::Internal { message } if message.contains("not found") => 
+                    (StatusCode::NOT_FOUND, format!("Module '{}' not found", module_name)),
+                crate::errors::SigilError::InsufficientLoa { .. } => 
+                    (StatusCode::FORBIDDEN, format!("Insufficient LOA for module '{}'", module_name)),
+                _ => (StatusCode::INTERNAL_SERVER_ERROR, format!("Module execution failed: {}", e))
+            })?
     };
     
-    if !evaluation.allowed {
-        return Err((StatusCode::FORBIDDEN, "Module execution denied by trust evaluation".to_string()));
-    }
+    info!("Successfully executed module '{}' for user '{}'", module_name, req.user_id);
     
-    // In a real implementation, you'd use the ModuleRegistry to run the module
-    // For now, return a response that includes the user_id for verification
     Ok(Json(ModuleRunResponse {
-        output: format!("Module {} executed for user {} with input: {}", module_name, req.user_id, req.input),
+        output: module_result,
         error: None,
     }))
 }
@@ -586,11 +600,24 @@ async fn canon_system_propose(
         return Err((StatusCode::FORBIDDEN, "System proposal denied by trust evaluation".to_string()));
     }
     
-    // Generate proposal ID
-    let proposal_id = uuid::Uuid::new_v4().to_string();
+    // Create proposal in the quorum system
+    let proposal_id = {
+        let runtime = runtime.read().map_err(|e| {
+            error!("Runtime read lock poisoned: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+        })?;
+        
+        let mut quorum_system = runtime.quorum_system.lock().map_err(|e| {
+            error!("Quorum system lock poisoned: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "quorum system lock poisoned".to_string())
+        })?;
+        
+        quorum_system.create_proposal(req.entry, req.content, req.required_k)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create proposal: {e}")))?
+    };
     
-    // In a real implementation, you'd store the proposal with entry, content, and required_k
-    // and wait for quorum signatures. For now, return the proposal ID with validation.
+    info!("Created system proposal {} requiring {}-of-n signatures", proposal_id, req.required_k);
+    
     Ok(Json(SystemProposalResponse {
         proposal_id,
         error: None,
@@ -659,8 +686,38 @@ async fn canon_system_attest(
         return Err((StatusCode::FORBIDDEN, "System attestation denied by trust evaluation".to_string()));
     }
     
-    // In a real implementation, you'd validate the signature and add it to the proposal
-    // For now, return success with validation that we processed all fields
+    // Add signature to the proposal and check if quorum is reached
+    let proposal_result = {
+        let runtime = runtime.read().map_err(|e| {
+            error!("Runtime read lock poisoned: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+        })?;
+        
+        let mut quorum_system = runtime.quorum_system.lock().map_err(|e| {
+            error!("Quorum system lock poisoned: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "quorum system lock poisoned".to_string())
+        })?;
+        
+        // Add the signature to the proposal
+        quorum_system.add_signature(&req.proposal_id, req.witness_id.clone(), req.signature)
+            .map_err(|e| (StatusCode::BAD_REQUEST, format!("Failed to add signature: {e}")))?;
+        
+        // Check if the proposal now has quorum and can be committed
+        quorum_system.get_proposal(&req.proposal_id)
+            .map(|p| (p.has_quorum(), p.get_signature_count(), p.required_k))
+            .ok_or_else(|| (StatusCode::NOT_FOUND, "Proposal not found".to_string()))?
+    };
+    
+    let (has_quorum, current_sigs, required_k) = proposal_result;
+    
+    if has_quorum {
+        // TODO: Here we should commit the proposal to Canon
+        // For now, just log that quorum was reached
+        info!("Proposal {} reached quorum with {}/{} signatures", req.proposal_id, current_sigs, required_k);
+    } else {
+        info!("Proposal {} has {}/{} signatures (quorum not yet reached)", req.proposal_id, current_sigs, required_k);
+    }
+    
     Ok(Json(SystemAttestResponse {
         success: true,
         error: None,

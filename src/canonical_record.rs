@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::audit_chain::FrozenChain;
+use crate::audit_chain::{FrozenChain, ReasoningChain};
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
 use sha2::{Sha256, Digest};
 use ed25519_dalek::{SigningKey, Signer};
@@ -38,12 +38,12 @@ pub struct CanonicalRecord {
     pub witnesses: Vec<WitnessRecord>,
 }
 
-/// Simple relation between two records.  `rel` describes the
-/// relationship type (e.g., "parent", "context").
+/// Simple relation between two records.  `label` describes the
+/// relationship type, `target` is the target record ID.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Link {
-    pub rel: String,
-    pub id: String,
+    pub label: String,
+    pub target: String,
 }
 
 /// External witness signature attached to a record.
@@ -89,8 +89,8 @@ impl CanonicalRecord {
             .parent_chain_ids
             .iter()
             .map(|p| Link {
-                rel: "parent".to_string(),
-                id: p.clone(),
+                label: "parent".to_string(),
+                target: p.clone(),
             })
             .collect();
 
@@ -111,40 +111,51 @@ impl CanonicalRecord {
         })
     }
 
-    /// Produce a canonical JSON string for this record.
-    /// This uses serde_json to serialize the record with sorted keys to ensure
-    /// deterministic ordering. If serialization fails, an error is returned.
+    /// Construct a canonical record from a ReasoningChain.  
+    /// ReasoningChains are mutable process records used during active reasoning.
+    pub fn from_reasoning_chain(
+        chain: &ReasoningChain,
+        tenant: &str,
+        space: &str,
+        prev: Option<&str>,
+    ) -> Result<Self, String> {
+        // Serialize the ReasoningChain as JSON for the payload
+        let payload = serde_json::to_value(chain)
+            .map_err(|e| format!("Failed to serialize ReasoningChain: {e}"))?;
+
+        // ReasoningChains don't have witnesses yet (they're still mutable)
+        let witnesses: Vec<WitnessRecord> = Vec::new();
+
+        // ReasoningChains don't have parent_chain_ids (they're still mutable)
+        // Links will be established when the chain is frozen
+        let links: Vec<Link> = Vec::new();
+
+        // Generate a hash of the canonical payload for integrity
+        let canonical_json = serde_json::to_string(&payload)
+            .map_err(|e| format!("Failed to serialize payload: {e}"))?;
+        let hash = hex::encode(Sha256::digest(canonical_json.as_bytes()));
+
+        Ok(CanonicalRecord {
+            kind: "reasoning_chain".to_string(),
+            schema_version: 1,
+            id: chain.audit.chain_id.clone(),
+            tenant: tenant.to_string(),
+            ts: Utc::now(), // ReasoningChains are created "now"
+            space: space.to_string(),
+            payload,
+            links,
+            prev: prev.map(String::from),
+            hash,
+            sig: None, // ReasoningChains are not signed yet (still mutable)
+            pub_key: None,
+            witnesses,
+        })
+    }
+
+    /// Produce a canonical JSON string for this record using RFC 8785 (JCS).
+    /// This ensures cryptographically stable canonicalization for hashing and signing.
     pub fn to_canonical_json(&self) -> Result<String, String> {
-        // Convert to a serde_json::Value and sort the keys.
-        let value = serde_json::to_value(self)
-            .map_err(|e| format!("Failed to serialize CanonicalRecord: {e}"))?;
-
-        // Sort the map keys recursively.  For canonicalization we
-        // recursively sort all object keys; arrays and other types
-        // remain in their original order.
-        fn sort_json(value: &mut Value) {
-            match value {
-                Value::Object(map) => {
-                    let mut entries: Vec<(String, Value)> = map.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-                    entries.sort_by(|a, b| a.0.cmp(&b.0));
-                    for (k, mut v) in entries {
-                        sort_json(&mut v);
-                        map.insert(k, v);
-                    }
-                }
-                Value::Array(arr) => {
-                    for v in arr.iter_mut() {
-                        sort_json(v);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        let mut sorted_value = value;
-        sort_json(&mut sorted_value);
-        serde_json::to_string(&sorted_value)
-            .map_err(|e| format!("Failed to serialize canonical JSON: {e}"))
+        crate::canonicalize::canonicalize_record(self)
     }
 
     /// Construct a canonical record from a TrustedKnowledgeEntry.  This helper

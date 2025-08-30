@@ -148,11 +148,10 @@ impl QuorumSystem {
         }
         
         if !proposal.has_quorum() {
-            return Err(crate::errors::SigilError::insufficient_loa(
-                "commit_proposal",
-                &format!("Proposal requires {} signatures, got {}", 
+                        return Err(crate::errors::SigilError::Internal {
+                message: format!("Proposal requires {} signatures, got {}",
                         proposal.required_k, proposal.signers.len())
-            ));
+            });
         }
         
         // Remove the proposal from pending list

@@ -66,8 +66,8 @@ impl ModuleRegistry {
         // Check LOA requirement
         if ctx.loa < module.required_loa() {
             return Err(crate::errors::SigilError::insufficient_loa(
-                "run_module",
-                &format!("Module {} requires {:?}, got {:?}", name, module.required_loa(), ctx.loa)
+                module.required_loa(),
+                ctx.loa.clone()
             ));
         }
         

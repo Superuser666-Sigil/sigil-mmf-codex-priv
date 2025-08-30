@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "encrypted_private_key_b64": "J5kI322xoyYhPxqs5ZBXQKLdeZjwkoOji+r8R33ggtpNlzxnJ5LreyCumay6G/jq",
+  "public_key_b64": "6vEPTMzYwFLRWM+A/Y2v70VCCDjX3kgB+t9RMFBJ9M4=",
+  "nonce_b64": "PPowPtBS5GDf4LUz",
+  "created_at": "2025-08-30T01:05:14.044653100+00:00",
+  "key_index": 1,
+  "purpose": "Canon record signing (current)"
+}

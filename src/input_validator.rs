@@ -217,8 +217,8 @@ impl InputValidator {
             "chown",
             "sudo",
             "su",
-            "root",
-            "admin",
+            "/root",  // Path-based root access, not just word "root"
+            "/admin", // Path-based admin access
             "password",
             "passwd",
             "shadow",

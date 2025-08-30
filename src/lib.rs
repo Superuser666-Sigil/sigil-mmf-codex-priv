@@ -41,19 +41,8 @@ pub mod extensions;
 pub mod module_loader;
 pub mod module_scope;
 
-// IRL (In Real Life) data pipeline and executors
-pub mod irl_adapter;
-pub mod irl_data_pipeline;
-pub mod irl_executor;
-pub mod irl_explainer;
-pub mod irl_feature_store;
-pub mod irl_modes;
-pub mod irl_reward;
-pub mod irl_runtime;
-pub mod irl_telemetry;
-pub mod irl_train_tool;
-pub mod irl_trust_evaluator;
-pub mod irl_versioning;
+// Runtime configuration
+pub mod runtime_config;
 
 // Configuration & CLI
 pub mod cli;
@@ -71,10 +60,10 @@ pub mod backup_recovery;
 // Session & runtime core
 pub mod session_context;
 pub mod sigil_runtime_core;
-pub mod sigil_runtime_core_patch_with_irl;
+
 pub mod input_validator;
 pub mod sigil_session;
-pub mod sigilirl;
+
 
 // Platform optimizations
 pub mod platform_optimizations;
@@ -94,6 +83,15 @@ pub mod sigil_vault_encrypted;
 // Canonical record representation for Codex Nexus
 pub mod canonical_record;
 
+// JSON Canonicalization Scheme (RFC 8785)
+pub mod canonicalize;
+
+// Persistent Ed25519 key management
+pub mod keys;
+
+// Witness registry for trusted public keys
+pub mod witness_registry;
+
 // Logging
 pub mod log_sink;
 
@@ -105,6 +103,8 @@ mod tests {
     pub mod audit_chain_test;
     pub mod canon_store;
     pub mod security_tests;
+    pub mod module_tests;
+    pub mod module_integration_test;
 }
 
 // Re-export key types for the two-phase ReasoningChain -> FrozenChain approach

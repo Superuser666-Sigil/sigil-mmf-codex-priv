@@ -1,0 +1,38 @@
+# Sigil Protocol License File
+# Generated on 2025-08-30 02:15:21 UTC
+# Valid from 2025-08-30T02:15:21.327197600+00:00 until 2025-11-28T02:15:21.327197600+00:00
+
+[license]
+id = "sigil-license-aafb144905694d42a33ed3322c08404d"
+issuedAt = "2025-08-30T02:15:21.327197600+00:00"
+expiresAt = "2025-11-28T02:15:21.327197600+00:00"
+loa = "Root"
+scope = ["canon:system", "module:builtin", "runtime:sigil"]
+issuer = "sigil_trust_v1"
+version = "1.0"
+
+[license.owner]
+name = "Alice Root"
+mnemonic = "Generated-544b8dac"
+email = "alice@sigil.system"
+hashId = "544b8dac6fdc4d2e"
+
+[license.bindings]
+canonFingerprint = "sha256:placeholder-will-be-computed-at-runtime"
+runtimeId = "sigil-runtime-e20a65501e61482886e426d69b423d14"
+
+[license.trust]
+trustModel = "sigil_trust_v1"
+signature = "ed25519:placeholder-will-be-computed"
+sealed = true
+
+[license.permissions]
+canMutateCanon = true
+canOverrideAudit = true
+canRegisterModule = true
+canElevateIdentity = true
+
+[license.audit]
+lastVerified = "2025-08-30T02:15:21.327197600+00:00"
+verifier = "sigil-license-generator"
+canonicalized = true

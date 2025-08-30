@@ -8,7 +8,7 @@ use mmf_sigil::sigilweb::{build_trust_router, TrustCheckRequest};
 use mmf_sigil::sigil_runtime_core::SigilRuntimeCore;
 use mmf_sigil::canon_store_sled::CanonStoreSled;
 use mmf_sigil::loa::LOA;
-use mmf_sigil::irl_modes::IRLConfig;
+use mmf_sigil::runtime_config::RuntimeConfig as IRLConfig;
 use std::sync::Mutex;
 use serde_json::json;
 use std::sync::{Arc, RwLock};
