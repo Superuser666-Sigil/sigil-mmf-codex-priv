@@ -115,6 +115,8 @@ impl AuditStore {
         let reader = std::io::BufReader::new(file);
         let lines = std::io::BufRead::lines(reader);
 
+        let mut latest_chain: Option<FrozenChain> = None;
+
         for line in lines {
             let line = line.map_err(|e| format!("Failed to read line: {e}"))?;
             let canonical_record: CanonicalRecord = serde_json::from_str(&line)
@@ -129,11 +131,13 @@ impl AuditStore {
                 if !chain.verify_integrity()? {
                     return Err("Retrieved FrozenChain failed integrity verification".into());
                 }
-                return Ok(Some(chain));
+                
+                // Keep the latest occurrence (last one wins in append-only log)
+                latest_chain = Some(chain);
             }
         }
 
-        Ok(None)
+        Ok(latest_chain)
     }
 
     /// Get all FrozenChains in lineage order

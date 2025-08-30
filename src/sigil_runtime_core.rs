@@ -58,7 +58,7 @@ pub struct SigilRuntimeCore {
     pub quorum_system: std::sync::Mutex<QuorumSystem>,
 
     /// Registry of trusted witnesses for signature validation
-    pub witness_registry: WitnessRegistry,
+    pub witness_registry: Arc<WitnessRegistry>,
 
     /// Module registry for executing LOA-gated modules
     pub module_registry: std::sync::Mutex<ModuleRegistry>,
@@ -134,11 +134,11 @@ impl SigilRuntimeCore {
         // contains a default linear model with equal weights and bias.
         let trust_registry = TrustModelRegistry::default();
 
-        // Initialize the quorum system for witness signature validation
-        let quorum_system = std::sync::Mutex::new(QuorumSystem::new());
-
         // Initialize the witness registry
-        let witness_registry = WitnessRegistry::new(canon_store.clone())?;
+        let witness_registry = Arc::new(WitnessRegistry::new(canon_store.clone())?);
+
+        // Initialize the quorum system for witness signature validation
+        let quorum_system = std::sync::Mutex::new(QuorumSystem::new(witness_registry.clone()));
 
         // Initialize the module registry and register built-in modules
         let mut module_registry = ModuleRegistry::new();

@@ -1,6 +1,8 @@
 use crate::errors::SigilResult;
+use crate::witness_registry::WitnessRegistry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
@@ -102,12 +104,14 @@ impl SystemProposal {
 /// Quorum system for managing system proposals
 pub struct QuorumSystem {
     proposals: HashMap<String, SystemProposal>,
+    witness_registry: Arc<WitnessRegistry>,
 }
 
 impl QuorumSystem {
-    pub fn new() -> Self {
+    pub fn new(witness_registry: Arc<WitnessRegistry>) -> Self {
         Self {
             proposals: HashMap::new(),
+            witness_registry,
         }
     }
     
@@ -130,6 +134,16 @@ impl QuorumSystem {
             return Err(crate::errors::SigilError::invalid_input(
                 "add_signature",
                 "Proposal has expired"
+            ));
+        }
+        
+        // Validate the witness signature against the proposal content hash
+        let message = proposal.content_hash.as_bytes();
+        let is_valid = self.witness_registry.validate_witness_signature(&witness_id, message, &signature)?;
+        
+        if !is_valid {
+            return Err(crate::errors::SigilError::crypto_error(
+                format!("Invalid signature from witness {}", witness_id)
             ));
         }
         
@@ -205,19 +219,50 @@ pub struct ProposalStatus {
     pub expires_at: DateTime<Utc>,
 }
 
-impl Default for QuorumSystem {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Note: No Default implementation - QuorumSystem requires WitnessRegistry
 
 #[cfg(test)]
 mod tests {
     use super::*;
     
+    use crate::canon_store_sled::CanonStoreSled;
+    use crate::witness_registry::WitnessRegistry;
+    use tempfile::TempDir;
+    use ed25519_dalek::{SigningKey, Signer};
+    use base64::Engine;
+    
+    fn create_test_quorum_system() -> (QuorumSystem, TempDir, SigningKey, String) {
+        let temp_dir = TempDir::new().unwrap();
+        let store_path = temp_dir.path().join("test_canon.db");
+        let canon_store = Arc::new(std::sync::Mutex::new(
+            CanonStoreSled::new(store_path.to_str().unwrap()).unwrap()
+        ));
+        
+        // Create a real Ed25519 signing key for testing
+        let signing_key = SigningKey::generate(&mut rand::rngs::OsRng);
+        let verifying_key = signing_key.verifying_key();
+        let public_key_b64 = base64::engine::general_purpose::STANDARD
+            .encode(verifying_key.as_bytes());
+        
+        // Create witness registry and add the test witness
+        let witness_registry = Arc::new(WitnessRegistry::new(canon_store.clone()).unwrap());
+        let witness_id = "test_witness_1".to_string();
+        witness_registry.add_witness(
+            witness_id.clone(),
+            public_key_b64,
+            "test_authority".to_string(),
+            "Test witness for quorum tests".to_string(),
+            &crate::loa::LOA::Root,
+        ).unwrap();
+        
+        let quorum_system = QuorumSystem::new(witness_registry);
+        (quorum_system, temp_dir, signing_key, witness_id)
+    }
+    
     #[test]
     fn test_proposal_creation() {
-        let mut quorum = QuorumSystem::new();
+        let (mut quorum, _temp_dir, _signing_key, _witness_id) = create_test_quorum_system();
+        
         let proposal_id = quorum.create_proposal(
             "test_entry".to_string(),
             "test_content".to_string(),
@@ -225,38 +270,95 @@ mod tests {
         ).unwrap();
         
         assert!(quorum.get_proposal(&proposal_id).is_some());
+        let proposal = quorum.get_proposal(&proposal_id).unwrap();
+        assert_eq!(proposal.required_k, 3);
+        assert_eq!(proposal.signers.len(), 0);
+        assert!(!proposal.has_quorum());
     }
     
     #[test]
-    fn test_quorum_validation() {
-        let mut proposal = SystemProposal::new(
+    fn test_quorum_validation_with_real_signatures() {
+        let (mut quorum, _temp_dir, signing_key, witness_id) = create_test_quorum_system();
+        
+        // Create a proposal
+        let proposal_id = quorum.create_proposal(
             "test_entry".to_string(),
             "test_content".to_string(),
-            2
-        );
+            1 // Only need 1 signature for this test
+        ).unwrap();
         
+        // Get the proposal to sign its content hash
+        let proposal = quorum.get_proposal(&proposal_id).unwrap();
+        let message = proposal.content_hash.as_bytes();
+        
+        // Create a real Ed25519 signature
+        let signature = signing_key.sign(message);
+        let signature_b64 = base64::engine::general_purpose::STANDARD
+            .encode(signature.to_bytes());
+        
+        // Add the signature
+        quorum.add_signature(&proposal_id, witness_id, signature_b64).unwrap();
+        
+        // Verify quorum is achieved
+        let updated_proposal = quorum.get_proposal(&proposal_id).unwrap();
+        assert!(updated_proposal.has_quorum());
+        assert_eq!(updated_proposal.signers.len(), 1);
+    }
+    
+    #[test]
+    fn test_invalid_signature_rejection() {
+        let (mut quorum, _temp_dir, _signing_key, witness_id) = create_test_quorum_system();
+        
+        // Create a proposal
+        let proposal_id = quorum.create_proposal(
+            "test_entry".to_string(),
+            "test_content".to_string(),
+            1
+        ).unwrap();
+        
+        // Try to add an invalid signature
+        let invalid_signature = base64::engine::general_purpose::STANDARD
+            .encode(vec![0u8; 64]); // Invalid signature bytes
+        
+        let result = quorum.add_signature(&proposal_id, witness_id, invalid_signature);
+        assert!(result.is_err());
+        
+        // Verify no signature was added
+        let proposal = quorum.get_proposal(&proposal_id).unwrap();
+        assert_eq!(proposal.signers.len(), 0);
         assert!(!proposal.has_quorum());
-        
-        proposal.add_signature("witness1".to_string(), "sig1".to_string()).unwrap();
-        assert!(!proposal.has_quorum());
-        
-        proposal.add_signature("witness2".to_string(), "sig2".to_string()).unwrap();
-        assert!(proposal.has_quorum());
     }
     
     #[test]
     fn test_duplicate_signature_prevention() {
-        let mut proposal = SystemProposal::new(
+        let (mut quorum, _temp_dir, signing_key, witness_id) = create_test_quorum_system();
+        
+        // Create a proposal
+        let proposal_id = quorum.create_proposal(
             "test_entry".to_string(),
             "test_content".to_string(),
             2
-        );
+        ).unwrap();
         
-        proposal.add_signature("witness1".to_string(), "sig1".to_string()).unwrap();
+        // Get the proposal to sign its content hash
+        let proposal = quorum.get_proposal(&proposal_id).unwrap();
+        let message = proposal.content_hash.as_bytes();
         
-        // Try to add the same witness again
-        let result = proposal.add_signature("witness1".to_string(), "sig2".to_string());
+        // Create a real Ed25519 signature
+        let signature = signing_key.sign(message);
+        let signature_b64 = base64::engine::general_purpose::STANDARD
+            .encode(signature.to_bytes());
+        
+        // Add the signature once
+        quorum.add_signature(&proposal_id, witness_id.clone(), signature_b64.clone()).unwrap();
+        
+        // Try to add the same witness signature again
+        let result = quorum.add_signature(&proposal_id, witness_id, signature_b64);
         assert!(result.is_err());
+        
+        // Verify only one signature exists
+        let proposal = quorum.get_proposal(&proposal_id).unwrap();
+        assert_eq!(proposal.signers.len(), 1);
     }
 }
 

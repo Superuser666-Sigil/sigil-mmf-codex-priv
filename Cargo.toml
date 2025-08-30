@@ -9,9 +9,7 @@ resolver = "2"
 name = "mmf_sigil"
 path = "src/main.rs"
 
-[[bin]]
-name = "trainer"
-path = "src/bin/trainer.rs"
+
 
 [[bin]]
 name = "canon_signer"

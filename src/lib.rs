@@ -95,8 +95,7 @@ pub mod witness_registry;
 // Logging
 pub mod log_sink;
 
-// Protocol definitions
-pub mod proto;
+
 
 #[cfg(test)]
 mod tests {

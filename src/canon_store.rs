@@ -1,7 +1,7 @@
 use crate::loa::LOA;
 use crate::canonical_record::CanonicalRecord;
-use crate::secure_file_ops::SecureFileOperations;
-use serde_json::Value;
+use crate::errors::{SigilResult, SigilError};
+use std::sync::{Arc, Mutex};
 
 pub trait CanonStore: Send + Sync {
     /// Load a canonical record by key.  Returns None if the caller's LOA
@@ -25,69 +25,72 @@ pub trait CanonStore: Send + Sync {
     fn list_records(&self, kind: Option<&str>, loa: &LOA) -> Vec<CanonicalRecord>;
 }
 
-pub fn revert_node(id: &str, to_hash: &str) -> Result<(), String> {
-    // Initialize secure file operations
-    let secure_file_ops = SecureFileOperations::new(
-        vec!["canon files".to_string()], 
-        1024 * 1024 // 1MB max file size
-    ).map_err(|e| format!("Failed to initialize secure file operations: {e}"))?;
-    
-    // Load the current canon file securely
-    let canon_path = "canon files/canon.json";
-    let content_bytes = secure_file_ops.read_file_secure(
-        std::path::Path::new(canon_path)
-    ).map_err(|e| format!("Failed to read canon file securely: {e}"))?;
-    
-    let content = String::from_utf8(content_bytes)
-        .map_err(|e| format!("Failed to parse canon file content: {e}"))?;
+/// Revert a Canon record to a previous version using CanonStore
+/// This searches through the record's lineage chain to find the target hash
+pub fn revert_node_with_store(
+    canon_store: Arc<Mutex<dyn CanonStore>>, 
+    id: &str, 
+    to_hash: &str, 
+    requester_loa: &LOA
+) -> SigilResult<()> {
+    let mut store = canon_store.lock()
+        .map_err(|_| SigilError::internal("Failed to acquire canon store lock"))?;
 
-    let mut canon: Value =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse canon JSON: {e}"))?;
+    // Only Root can revert records
+    if !matches!(requester_loa, LOA::Root) {
+        return Err(SigilError::insufficient_loa(LOA::Root, requester_loa.clone()));
+    }
 
-    // Find the node to revert
-    if let Some(entries) = canon.get_mut("entries")
-        && let Some(entries_arr) = entries.as_array_mut() {
-        for entry in entries_arr.iter_mut() {
-            if let Some(entry_id) = entry.get("id").and_then(|id| id.as_str())
-                && entry_id == id {
-                // Check if the target hash exists in version history
-                if let Some(versions) = entry.get("versions")
-                    && let Some(version_array) = versions.as_array() {
-                    for version in version_array {
-                        if let Some(version_hash) =
-                            version.get("hash").and_then(|h| h.as_str())
-                            && version_hash == to_hash {
-                            // Revert to this version
-                            if let Some(content) = version.get("content") {
-                                entry["content"] = content.clone();
-                                entry["current_hash"] =
-                                    serde_json::Value::String(to_hash.to_string());
+    // Load the current record
+    let current_record = store.load_record(id, requester_loa)
+        .ok_or_else(|| SigilError::not_found("record", id))?;
 
-                                // Write back to file securely
-                                let updated_content = serde_json::to_string_pretty(
-                                    &canon,
-                                )
-                                .map_err(|e| {
-                                    format!("Failed to serialize canon: {e}")
-                                })?;
+    // Search through the lineage chain to find the target hash
+    let mut target_record = None;
+    let mut search_id = Some(id.to_string());
 
-                                secure_file_ops.write_file_secure(
-                                    std::path::Path::new(canon_path),
-                                    updated_content.as_bytes()
-                                ).map_err(|e| format!("Failed to write canon file securely: {e}"))?;
-
-                                println!("✅ Successfully reverted node '{id}' to hash '{to_hash}'");
-                                return Ok(());
-                            }
-                        }
-                    }
-                }
-                return Err(format!(
-                    "Target hash '{to_hash}' not found in version history for node '{id}'"
-                ));
+    while let Some(current_id) = search_id {
+        if let Some(record) = store.load_record(&current_id, requester_loa) {
+            if record.hash == to_hash {
+                target_record = Some(record);
+                break;
             }
+            search_id = record.prev;
+        } else {
+            break;
         }
     }
 
-    Err(format!("Node '{id}' not found in canon"))
+    let target = target_record
+        .ok_or_else(|| SigilError::not_found("record with hash", to_hash))?;
+
+    // Create a new record based on the target but with updated metadata
+    let reverted_record = CanonicalRecord {
+        id: current_record.id.clone(),
+        kind: target.kind,
+        schema_version: target.schema_version,
+        tenant: target.tenant,
+        ts: chrono::Utc::now(),
+        space: target.space,
+        payload: target.payload,
+        links: target.links,
+        prev: Some(current_record.id.clone()), // Link to the current record as previous
+        hash: String::new(), // Will be computed during canonicalization
+        sig: None,     // Will be signed during persistence
+        pub_key: None,    // Will be set during persistence
+        witnesses: Vec::new(),
+    };
+
+    // Add the reverted record to the store
+    store.add_record(reverted_record, requester_loa, false)
+        .map_err(|e| SigilError::canon("revert", e))?;
+
+    Ok(())
+}
+
+/// Legacy revert_node function that uses file-based operations
+/// Deprecated: Use revert_node_with_store instead
+#[deprecated(note = "Use revert_node_with_store with CanonStore instead")]
+pub fn revert_node(_id: &str, _to_hash: &str) -> Result<(), String> {
+    Err("Legacy file-based revert is deprecated. Use CanonStore-based revert instead.".into())
 }

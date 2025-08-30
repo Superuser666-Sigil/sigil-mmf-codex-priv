@@ -134,29 +134,157 @@ pub fn dispatch(cli: Cli) {
             println!("Seal functionality not yet implemented");
         }
         Commands::Validate { file } => {
-            match crate::canon_loader::load_canon_entries(&file) {
-                Ok(entries) => {
-                    for (i, entry) in entries.iter().enumerate() {
-                        // Convert CanonNode to serde_json::Value for validation
-                        let entry_json =
-                            serde_json::to_value(entry).unwrap_or_else(|_| serde_json::json!({}));
-                        match crate::canon_validator::validate_entry(&entry_json) {
-                            Ok(_) => println!("Entry [{i}] valid."),
-                            Err(e) => eprintln!("Entry [{i}] failed: {e}"),
-                        }
+            // For backwards compatibility, support both file-based and CanonStore-based validation
+            if file == "canon_store" || file == "store" {
+                // Validate records from CanonStore
+                use crate::canon_store::CanonStore;
+                use crate::canon_store_sled::CanonStoreSled;
+                use crate::license_validator::load_current_loa;
+                use std::sync::{Arc, Mutex};
+
+                let loa = match load_current_loa() {
+                    Ok(loa) => loa,
+                    Err(e) => {
+                        eprintln!("Failed to determine LOA: {e}");
+                        return;
+                    }
+                };
+
+                let store = match CanonStoreSled::new("data/canon_store") {
+                    Ok(s) => Arc::new(Mutex::new(s)),
+                    Err(e) => {
+                        eprintln!("Failed to open canon store: {e}");
+                        return;
+                    }
+                };
+
+                let records = {
+                    let store_guard = store.lock().unwrap();
+                    store_guard.list_records(None, &loa)
+                };
+
+                println!("Validating {} records from CanonStore:", records.len());
+                for (i, record) in records.iter().enumerate() {
+                    // Validate CanonicalRecord structure
+                    let mut validation_errors = Vec::new();
+
+                    // Check required fields
+                    if record.id.is_empty() {
+                        validation_errors.push("ID cannot be empty");
+                    }
+                    if record.kind.is_empty() {
+                        validation_errors.push("Kind cannot be empty");
+                    }
+                    if record.tenant.is_empty() {
+                        validation_errors.push("Tenant cannot be empty");
+                    }
+                    if record.space.is_empty() {
+                        validation_errors.push("Space cannot be empty");
+                    }
+                    if record.hash.is_empty() {
+                        validation_errors.push("Hash cannot be empty");
+                    }
+
+                    // Validate hash format (should be hex)
+                    if !record.hash.chars().all(|c| c.is_ascii_hexdigit()) {
+                        validation_errors.push("Hash must be valid hex");
+                    }
+
+                    // Validate signature and public key consistency
+                    if record.sig.is_some() != record.pub_key.is_some() {
+                        validation_errors.push("Signature and public key must both be present or both be None");
+                    }
+
+                    if validation_errors.is_empty() {
+                        println!("Record [{}] ({}) valid.", i, record.id);
+                    } else {
+                        eprintln!("Record [{}] ({}) failed: {}", i, record.id, validation_errors.join(", "));
                     }
                 }
-                Err(e) => eprintln!("Failed to load file: {e}"),
+            } else {
+                // Legacy file-based validation for backwards compatibility
+                match crate::canon_loader::load_canon_entries(&file) {
+                    Ok(entries) => {
+                        println!("Validating {} entries from file {} (legacy format):", entries.len(), file);
+                        for (i, entry) in entries.iter().enumerate() {
+                            // Convert CanonNode to serde_json::Value for validation
+                            let entry_json =
+                                serde_json::to_value(entry).unwrap_or_else(|_| serde_json::json!({}));
+                            match crate::canon_validator::validate_entry(&entry_json) {
+                                Ok(_) => println!("Entry [{i}] valid."),
+                                Err(e) => eprintln!("Entry [{i}] failed: {e}"),
+                            }
+                        }
+                    }
+                    Err(e) => eprintln!("Failed to load file: {e}"),
+                }
             }
         }
 
-        Commands::Diff { id } => match crate::canon_diff_chain::diff_by_id(&id) {
-            Ok(diff) => println!("{diff:?}"),
-            Err(e) => eprintln!("Diff failed: {e}"),
+        Commands::Diff { id } => {
+            // Initialize canon store for diff operation
+            use crate::canon_store_sled::CanonStoreSled;
+            use crate::canon_diff_chain::diff_by_id_with_store;
+            use crate::license_validator::load_current_loa;
+            use std::sync::{Arc, Mutex};
+
+            let loa = match load_current_loa() {
+                Ok(loa) => loa,
+                Err(e) => {
+                    eprintln!("Failed to determine LOA: {e}");
+                    return;
+                }
+            };
+
+            let store = match CanonStoreSled::new("data/canon_store") {
+                Ok(s) => Arc::new(Mutex::new(s)),
+                Err(e) => {
+                    eprintln!("Failed to open canon store: {e}");
+                    return;
+                }
+            };
+
+            match diff_by_id_with_store(store, &id, &loa) {
+                Ok(diff) => {
+                    if diff.is_empty() {
+                        println!("No differences found for record '{}'", id);
+                    } else {
+                        println!("Differences for record '{}':", id);
+                        for (key, value) in diff {
+                            println!("  {}: {}", key, value);
+                        }
+                    }
+                },
+                Err(e) => eprintln!("Diff failed: {e}"),
+            }
         },
-        Commands::Revert { id, to_hash } => match crate::canon_store::revert_node(&id, &to_hash) {
-            Ok(_) => println!("Reverted {id} to {to_hash}"),
-            Err(e) => eprintln!("Revert failed: {e}"),
+        Commands::Revert { id, to_hash } => {
+            // Initialize canon store for revert operation
+            use crate::canon_store_sled::CanonStoreSled;
+            use crate::canon_store::revert_node_with_store;
+            use crate::license_validator::load_current_loa;
+            use std::sync::{Arc, Mutex};
+
+            let loa = match load_current_loa() {
+                Ok(loa) => loa,
+                Err(e) => {
+                    eprintln!("Failed to determine LOA: {e}");
+                    return;
+                }
+            };
+
+            let store = match CanonStoreSled::new("data/canon_store") {
+                Ok(s) => Arc::new(Mutex::new(s)),
+                Err(e) => {
+                    eprintln!("Failed to open canon store: {e}");
+                    return;
+                }
+            };
+
+            match revert_node_with_store(store, &id, &to_hash, &loa) {
+                Ok(_) => println!("✅ Successfully reverted record '{}' to hash '{}'", id, to_hash),
+                Err(e) => eprintln!("Revert failed: {e}"),
+            }
         },
         Commands::Whoami => match crate::license_validator::load_current_loa() {
             Ok(loa) => println!("You are operating as {loa:?}"),

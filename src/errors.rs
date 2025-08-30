@@ -44,6 +44,9 @@ pub enum SigilError {
     #[error("Encryption operation failed: {operation}")]
     Encryption { operation: String },
 
+    #[error("Cryptographic operation failed: {message}")]
+    Crypto { message: String },
+
     #[error("Mutex lock failed: {resource}")]
     MutexPoisoned { resource: String },
 
@@ -136,6 +139,13 @@ impl SigilError {
     pub fn encryption(operation: impl Into<String>) -> Self {
         Self::Encryption {
             operation: operation.into(),
+        }
+    }
+
+    /// Create a cryptographic error
+    pub fn crypto_error(message: impl Into<String>) -> Self {
+        Self::Crypto {
+            message: message.into(),
         }
     }
 

@@ -1,81 +1,74 @@
-use crate::canon_loader::CanonNode;
+use crate::canonical_record::CanonicalRecord;
+use crate::canon_store::CanonStore;
+use crate::loa::LOA;
 use std::collections::HashMap;
-use std::fs;
+use std::sync::{Arc, Mutex};
 
-/// Compute a basic semantic diff between two CanonNodes using title, tags, and trust_level
-pub fn semantic_diff(a: &CanonNode, b: &CanonNode) -> HashMap<String, String> {
+/// Compute a basic semantic diff between two CanonicalRecords
+pub fn semantic_diff(a: &CanonicalRecord, b: &CanonicalRecord) -> HashMap<String, String> {
     let mut diffs = HashMap::new();
 
-    if a.title != b.title {
-        diffs.insert("title".into(), format!("{} -> {}", a.title, b.title));
+    if a.schema_version != b.schema_version {
+        diffs.insert("schema_version".into(), format!("{} -> {}", a.schema_version, b.schema_version));
     }
 
-    if a.trust_level != b.trust_level {
-        diffs.insert(
-            "trust_level".into(),
-            format!("{} -> {}", a.trust_level, b.trust_level),
-        );
+    if a.kind != b.kind {
+        diffs.insert("kind".into(), format!("{} -> {}", a.kind, b.kind));
     }
 
-    if a.flags != b.flags {
-        diffs.insert("flags".into(), format!("{:?} -> {:?}", a.flags, b.flags));
+    if a.tenant != b.tenant {
+        diffs.insert("tenant".into(), format!("{} -> {}", a.tenant, b.tenant));
     }
 
-    if a.tags != b.tags {
-        diffs.insert("tags".into(), format!("{:?} -> {:?}", a.tags, b.tags));
+    if a.space != b.space {
+        diffs.insert("space".into(), format!("{} -> {}", a.space, b.space));
+    }
+
+    if a.hash != b.hash {
+        diffs.insert("hash".into(), format!("{} -> {}", a.hash, b.hash));
+    }
+
+    if a.payload != b.payload {
+        diffs.insert("payload".into(), "Payload content changed".into());
+    }
+
+    if a.sig != b.sig {
+        diffs.insert("sig".into(), "Signature changed".into());
+    }
+
+    if a.pub_key != b.pub_key {
+        diffs.insert("pub_key".into(), "Public key changed".into());
     }
 
     diffs
 }
 
-pub fn diff_by_id(id: &str) -> Result<HashMap<String, String>, String> {
-    // Load current canon entries
-    let current_entries = crate::canon_loader::load_canon_entries("canon files/canon.json")?;
+/// Diff a Canon record by ID using CanonStore
+/// This compares the current record with its predecessor (prev field)
+pub fn diff_by_id_with_store(canon_store: Arc<Mutex<dyn CanonStore>>, id: &str, requester_loa: &LOA) -> Result<HashMap<String, String>, String> {
+    let store = canon_store.lock()
+        .map_err(|_| "Failed to acquire canon store lock".to_string())?;
 
-    // Find the specified node
-    let current_node = current_entries
-        .iter()
-        .find(|node| node.id == id)
-        .ok_or_else(|| format!("Node with ID '{id}' not found in current canon"))?;
+    // Load the current record
+    let current_record = store.load_record(id, requester_loa)
+        .ok_or_else(|| format!("Record with ID '{}' not found or insufficient permissions", id))?;
 
-    // Try to load previous version from backup
-    let backup_path = format!("canon files/backup/canon_{id}.json");
-    let previous_entries = match fs::read_to_string(&backup_path) {
-        Ok(content) => {
-            let json: serde_json::Value = serde_json::from_str(&content)
-                .map_err(|e| format!("Failed to parse backup JSON: {e}"))?;
+    // Check if there's a previous version
+    if let Some(prev_id) = &current_record.prev {
+        let previous_record = store.load_record(prev_id, requester_loa)
+            .ok_or_else(|| format!("Previous record with ID '{}' not found or insufficient permissions", prev_id))?;
 
-            let mut nodes = Vec::new();
-            if let Some(entries) = json.get("entries")
-                && let Some(entries_array) = entries.as_array() {
-                for entry in entries_array {
-                    if let Ok(node) = CanonNode::from_json(entry) {
-                        nodes.push(node);
-                    }
-                }
-            }
-            nodes
-        }
-        Err(_) => {
-            // No backup found, return empty diff
-            return Ok(HashMap::new());
-        }
-    };
-
-    // Find the previous version of the node
-    let previous_node = previous_entries.iter().find(|node| node.id == id);
-
-    match previous_node {
-        Some(prev) => {
-            // Compute diff between previous and current
-            let diffs = semantic_diff(prev, current_node);
-            println!("Found {} differences for node '{}'", diffs.len(), id);
-            Ok(diffs)
-        }
-        None => {
-            // No previous version found
-            println!("No previous version found for node '{id}'");
-            Ok(HashMap::new())
-        }
+        Ok(semantic_diff(&previous_record, &current_record))
+    } else {
+        Ok(HashMap::from([
+            ("status".into(), "No previous version found - this is the initial record".into())
+        ]))
     }
+}
+
+/// Legacy diff_by_id function that uses file-based operations
+/// Deprecated: Use diff_by_id_with_store instead
+#[deprecated(note = "Use diff_by_id_with_store with CanonStore instead")]
+pub fn diff_by_id(_id: &str) -> Result<HashMap<String, String>, String> {
+    Err("Legacy file-based diff is deprecated. Use CanonStore-based diff instead.".into())
 }

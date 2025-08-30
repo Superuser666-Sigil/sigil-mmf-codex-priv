@@ -167,11 +167,11 @@ impl WitnessRegistry {
             .unwrap_or(false)
     }
     
-    /// Validate a witness signature (stub for now - would need crypto validation)
+    /// Validate a witness signature using Ed25519 cryptographic verification
     pub fn validate_witness_signature(
         &self,
         witness_id: &str,
-        _message: &[u8], // TODO: Use in actual Ed25519 verification
+        message: &[u8],
         signature: &str,
     ) -> SigilResult<bool> {
         let witness = self.get_witness(witness_id)
@@ -181,18 +181,48 @@ impl WitnessRegistry {
             return Ok(false);
         }
         
-        // TODO: Implement actual Ed25519 signature validation
-        // For now, return true if the witness exists and is active
-        // In a real implementation, this would:
-        // 1. Decode the base64 public key
-        // 2. Decode the base64 signature  
-        // 3. Verify the signature against the message using Ed25519
-        
         if signature.is_empty() {
             return Ok(false);
         }
         
-        Ok(true) // Stub implementation
+        // Decode the base64 public key
+        let pub_key_bytes = base64::engine::general_purpose::STANDARD
+            .decode(&witness.public_key)
+            .map_err(|e| SigilError::crypto_error(format!("Invalid public key encoding: {}", e)))?;
+        
+        if pub_key_bytes.len() != 32 {
+            return Err(SigilError::crypto_error("Invalid public key length (expected 32 bytes)"));
+        }
+        
+        // Create Ed25519 verifying key
+        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(
+            pub_key_bytes.as_slice().try_into().map_err(|_| {
+                SigilError::crypto_error("Failed to convert public key bytes")
+            })?
+        ).map_err(|e| SigilError::crypto_error(format!("Invalid Ed25519 public key: {}", e)))?;
+        
+        // Decode the base64 signature
+        let sig_bytes = base64::engine::general_purpose::STANDARD
+            .decode(signature)
+            .map_err(|e| SigilError::crypto_error(format!("Invalid signature encoding: {}", e)))?;
+        
+        if sig_bytes.len() != 64 {
+            return Err(SigilError::crypto_error("Invalid signature length (expected 64 bytes)"));
+        }
+        
+        // Create Ed25519 signature
+        let signature = ed25519_dalek::Signature::from_bytes(
+            sig_bytes.as_slice().try_into().map_err(|_| {
+                SigilError::crypto_error("Failed to convert signature bytes")
+            })?
+        );
+        
+        // Verify the signature
+        use ed25519_dalek::Verifier;
+        match verifying_key.verify(message, &signature) {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false), // Invalid signature returns false, not an error
+        }
     }
     
     /// Reload witness registry from Canon

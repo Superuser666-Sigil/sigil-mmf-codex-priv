@@ -65,7 +65,7 @@ Sigil Runtime
 
     // Validate license
     let license_path =
-        std::env::var("SIGIL_LICENSE_PATH").unwrap_or_else(|_| "sigil_license.toml".into());
+        std::env::var("SIGIL_LICENSE_PATH").unwrap_or_else(|_| "docs/license_example.toml".into());
 
     let license_result = validate_license(
         &license_path,
