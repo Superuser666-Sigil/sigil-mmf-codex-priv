@@ -95,3 +95,192 @@ fn test_jcs_canonicalization_consistency() {
         assert_eq!(keys, sorted_keys, "Canonical JSON should have sorted keys");
     }
 }
+
+#[test]
+fn test_canon_write_verify_round_trip_with_quorum() {
+    use crate::keys::{CanonSigningKey, KeyManager};
+    use crate::canonical_record::CanonicalRecord;
+    use crate::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
+    use crate::witness_registry::WitnessRegistry;
+    use crate::quorum_system::QuorumSystem;
+    use chrono::Utc;
+    use sha2::{Sha256, Digest};
+    use ed25519_dalek::{SigningKey, Signer};
+    use base64::Engine;
+    use std::sync::{Arc, Mutex};
+    
+    let temp_dir = tempdir().expect("should be able to create temp dir for test");
+    let path = temp_dir.path().to_str().expect("temp path should be valid UTF-8");
+    
+    // Use proper key management for encryption key
+    let encryption_key = KeyManager::get_encryption_key().expect("should be able to get encryption key");
+    
+    // Use encrypted store with proper key management
+    let canon_store = Arc::new(Mutex::new(
+        EncryptedCanonStoreSled::new(path, &encryption_key).expect("should be able to create encrypted store")
+    ));
+    
+    println!("📋 Setting up test licenses for Root + three Mentors (TEST LICENSES ONLY)");
+    
+    // Create witness registry and add test witnesses
+    let witness_registry = Arc::new(WitnessRegistry::new(canon_store.clone()).expect("should create witness registry"));
+    
+    // Generate three mentor witness keys
+    let mentor_keys: Vec<_> = (0..3).map(|i| {
+        let signing_key = SigningKey::generate(&mut rand::rngs::OsRng);
+        let public_key_b64 = base64::engine::general_purpose::STANDARD
+            .encode(signing_key.verifying_key().as_bytes());
+        let witness_id = format!("test_mentor_{}", i + 1);
+        
+        println!("🔑 Generated TEST Mentor {} license (public key: {})", i + 1, &public_key_b64[..16]);
+        
+        // Add witness to registry
+        witness_registry.add_witness(
+            witness_id.clone(),
+            public_key_b64,
+            "TEST_AUTHORITY_MENTOR".to_string(),
+            format!("TEST LICENSE ONLY - Mentor {} for test quorum", i + 1),
+            &LOA::Root,
+        ).expect("should add test mentor witness");
+        
+        (witness_id, signing_key)
+    }).collect();
+    
+    // Create test record requiring quorum approval
+    let payload = serde_json::json!({
+        "key": "critical_system_config",
+        "value": "updated_trust_model_v2",
+        "session_id": "test_quorum_session",
+        "note": "This is a test canon write requiring Root + 3 Mentor witnesses"
+    });
+    
+    let mut record = CanonicalRecord {
+        kind: "system_config".to_string(),
+        schema_version: 1,
+        id: "critical_system_config".to_string(),
+        tenant: "system".to_string(),
+        ts: Utc::now(),
+        space: "system".to_string(),
+        payload,
+        links: vec![],
+        prev: None,
+        hash: String::new(), // Will be computed
+        sig: None,           // Will be signed
+        pub_key: None,       // Will be set from key store
+        witnesses: vec![],
+    };
+    
+    // Step 1: Create quorum proposal for this canon write
+    let mut quorum_system = QuorumSystem::new(witness_registry.clone());
+    let proposal_id = quorum_system.create_proposal(
+        record.id.clone(),
+        serde_json::to_string(&record.payload).expect("serialize payload"),
+        3 // Require 3 mentor signatures
+    ).expect("should create proposal");
+    
+    println!("📝 Created quorum proposal {} requiring 3 signatures", proposal_id);
+    
+    // Step 2: Get the proposal content hash for witnesses to sign
+    let content_hash_bytes = {
+        let proposal = quorum_system.get_proposal(&proposal_id).expect("proposal should exist");
+        proposal.content_hash.clone()
+    };
+    
+    // Step 3: Collect signatures from the three mentors
+    println!("✍️  Collecting signatures from test mentors...");
+    for (i, (witness_id, signing_key)) in mentor_keys.iter().enumerate() {
+        let signature = signing_key.sign(content_hash_bytes.as_bytes());
+        let signature_b64 = base64::engine::general_purpose::STANDARD.encode(signature.to_bytes());
+        
+        quorum_system.add_signature(&proposal_id, witness_id.clone(), signature_b64)
+            .expect("should add mentor signature");
+        
+        println!("   ✅ Mentor {} signed proposal", i + 1);
+    }
+    
+    // Step 4: Verify quorum is reached
+    let final_proposal = quorum_system.get_proposal(&proposal_id).expect("proposal should exist");
+    assert!(final_proposal.has_quorum(), "should have reached quorum");
+    println!("🎯 Quorum reached! {} of {} required signatures collected", 
+             final_proposal.get_signature_count(), final_proposal.required_k);
+    
+    // Step 5: Now we can canonicalize → hash → sign → persist with proper authorization
+    let canonical_json = record.to_canonical_json()
+        .expect("canonicalization should succeed");
+    
+    // Compute hash
+    let mut hasher = Sha256::new();
+    hasher.update(canonical_json.as_bytes());
+    let digest = hasher.finalize();
+    record.hash = hex::encode(digest);
+    
+    // Sign with Root's key
+    let root_signing_key = CanonSigningKey::generate();
+    let (signature, public_key) = root_signing_key.sign_record(canonical_json.as_bytes());
+    
+    record.sig = Some(signature);
+    record.pub_key = Some(public_key);
+    
+    // Add witness records from the quorum
+    for witness_sig in &final_proposal.signers {
+        record.witnesses.push(crate::canonical_record::WitnessRecord {
+            witness_id: witness_sig.witness_id.clone(),
+            signature: witness_sig.signature.clone(),
+            timestamp: witness_sig.signed_at,
+            authority: "TEST_MENTOR_QUORUM".to_string(),
+        });
+    }
+    
+    // Step 6: Persist CanonicalRecord with proper quorum authorization
+    let mut store_guard = canon_store.lock().expect("should lock store");
+    store_guard.add_record(record.clone(), &LOA::Root, true) // allow_operator_write=true for system space
+        .expect("should be able to write record with proper quorum");
+    drop(store_guard);
+    
+    // Step 7: Reload and verify
+    let store_guard = canon_store.lock().expect("should lock store for read");
+    let reloaded_record = store_guard.load_record("critical_system_config", &LOA::Root)
+        .expect("should be able to reload record");
+    drop(store_guard);
+    
+    // Step 8: Verify signature integrity
+    assert_eq!(reloaded_record.hash, record.hash, "hash should match");
+    assert_eq!(reloaded_record.sig, record.sig, "signature should match");
+    assert_eq!(reloaded_record.pub_key, record.pub_key, "public key should match");
+    assert_eq!(reloaded_record.witnesses.len(), 3, "should have 3 witness signatures");
+    
+    // Verify the Root signature is valid
+    let reloaded_canonical = reloaded_record.to_canonical_json()
+        .expect("reloaded record should canonicalize");
+    
+    let reloaded_signature = reloaded_record.sig.as_ref().expect("signature should exist");
+    root_signing_key.verify_signature(reloaded_canonical.as_bytes(), reloaded_signature)
+        .expect("Root signature should be valid");
+    
+    // Verify each witness signature
+    for (i, witness_record) in reloaded_record.witnesses.iter().enumerate() {
+        let is_valid = witness_registry.validate_witness_signature(
+            &witness_record.witness_id,
+            content_hash_bytes.as_bytes(),
+            &witness_record.signature
+        ).expect("should validate witness signature");
+        assert!(is_valid, "Mentor {} signature should be valid", i + 1);
+    }
+    
+    // Verify hash integrity
+    let mut recomputed_hasher = Sha256::new();
+    recomputed_hasher.update(reloaded_canonical.as_bytes());
+    let recomputed_digest = recomputed_hasher.finalize();
+    let recomputed_hash = hex::encode(recomputed_digest);
+    
+    assert_eq!(reloaded_record.hash, recomputed_hash, "recomputed hash should match stored hash");
+    
+    // Verify payload integrity
+    assert_eq!(reloaded_record.payload, record.payload, "payload should be intact");
+    assert_eq!(reloaded_record.kind, "system_config", "kind should be preserved");
+    assert_eq!(reloaded_record.tenant, "system", "tenant should be preserved");
+    assert_eq!(reloaded_record.space, "system", "space should be preserved");
+    
+    println!("✅ Canon write/verify round-trip test with proper quorum PASSED");
+    println!("🔒 Verified: Root signature + 3 Mentor witness signatures + hash integrity");
+}

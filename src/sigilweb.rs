@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::OnceLock;
 use std::sync::{Arc, RwLock};
+use sha2::{Digest};
+use hex;
 
 #[derive(Debug, Deserialize)]
 pub struct TrustCheckRequest {
@@ -101,6 +103,18 @@ pub struct SystemAttestResponse {
     error: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CSRFTokenRequest {
+    session_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CSRFTokenResponse {
+    token: String,
+    expires_in: u64,
+    error: Option<String>,
+}
+
 // Add trust-related routes
 pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
     // Initialize security components
@@ -116,6 +130,7 @@ pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) 
         .route("/api/canon/user/write", post(canon_user_write))
         .route("/api/canon/system/propose", post(canon_system_propose))
         .route("/api/canon/system/attest", post(canon_system_attest))
+        .route("/api/csrf/token", post(mint_csrf_token))
         .layer(Extension(runtime))
         .layer(Extension(rate_limiter))
         .layer(Extension(csrf_protection))
@@ -530,12 +545,77 @@ async fn canon_user_write(
         return Err((StatusCode::FORBIDDEN, "Canon write denied by trust evaluation".to_string()));
     }
     
-    // In a real implementation, you'd write to the canon store with user namespace
-    // For now, return success with validation that we processed the key and value
-    Ok(Json(CanonWriteResponse {
-        success: true,
-        error: None,
-    }))
+    // Now implement real canon write with signing
+    let write_result = {
+        let runtime = runtime.read().map_err(|e| {
+            error!("Runtime read lock poisoned: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+        })?;
+        
+        // Create a CanonicalRecord from the key/value
+        let payload = serde_json::json!({
+            "key": req.key,
+            "value": req.value,
+            "session_id": req.session_id
+        });
+        
+        let mut record = crate::canonical_record::CanonicalRecord {
+            kind: "user_data".to_string(),
+            schema_version: 1,
+            id: req.key.clone(),
+            tenant: "user".to_string(),
+            ts: chrono::Utc::now(),
+            space: "user".to_string(),
+            payload,
+            links: vec![],
+            prev: None,
+            hash: String::new(), // Will be computed
+            sig: None,           // Will be signed
+            pub_key: None,       // Will be set from key store
+            witnesses: vec![],
+        };
+        
+        // Canonicalize → hash → sign → persist CanonicalRecord
+        let canonical_json = record.to_canonical_json()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Canonicalization failed: {e}")))?;
+        
+        // Compute hash
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(canonical_json.as_bytes());
+        let digest = hasher.finalize();
+        record.hash = hex::encode(digest);
+        
+        // Sign with active key from KeyStore
+        let signing_key = crate::keys::KeyManager::get_or_create_canon_key()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get signing key: {e}")))?;
+        
+        let (signature, public_key) = signing_key.sign_record(canonical_json.as_bytes());
+        
+        record.sig = Some(signature);
+        record.pub_key = Some(public_key);
+        
+        // Persist to Canon Store
+        let mut canon_store = runtime.canon_store.lock().map_err(|e| {
+            error!("Canon store lock poisoned: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "canon store lock poisoned".to_string())
+        })?;
+        
+        canon_store.add_record(record, &LOA::Observer, false)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to persist record: {e}")))?;
+        
+        Ok::<(), (StatusCode, String)>(())
+    };
+    
+    match write_result {
+        Ok(()) => {
+            info!("Successfully wrote canon record for key: {}", req.key);
+            Ok(Json(CanonWriteResponse {
+                success: true,
+                error: None,
+            }))
+        },
+        Err(e) => Err(e)
+    }
 }
 
 #[axum::debug_handler]
@@ -720,6 +800,43 @@ async fn canon_system_attest(
     
     Ok(Json(SystemAttestResponse {
         success: true,
+        error: None,
+    }))
+}
+
+#[axum::debug_handler]
+async fn mint_csrf_token(
+    Extension(rate_limiter): Extension<Arc<RateLimiter>>,
+    Extension(csrf_protection): Extension<Arc<CSRFProtection>>,
+    headers: HeaderMap,
+    Json(req): Json<CSRFTokenRequest>,
+) -> Result<Json<CSRFTokenResponse>, (StatusCode, String)> {
+    // Rate limiting
+    let client_id = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("unknown");
+    
+    if !rate_limiter.check_rate_limit(client_id).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+    }
+    
+    // Validate session_id is not empty
+    if req.session_id.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "session_id cannot be empty".to_string()));
+    }
+    
+    // Mint a new CSRF token
+    let token = csrf_protection.generate_token(&req.session_id).await;
+    
+    // Log the token minting for security audit
+    log::info!("CSRF token minted for session: {} from client: {}", req.session_id, client_id);
+    
+    Ok(Json(CSRFTokenResponse {
+        token,
+        expires_in: 3600, // 1 hour
         error: None,
     }))
 }

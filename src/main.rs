@@ -16,7 +16,35 @@ use mmf_sigil::{
     sigilctl,
 };
 
+/// Ensure required log directories exist, failing closed if they can't be created
+fn ensure_log_directories() -> Result<(), std::io::Error> {
+    let log_dirs = ["logs", "test_logs"];
+    
+    for dir in &log_dirs {
+        if !std::path::Path::new(dir).exists() {
+            std::fs::create_dir_all(dir)?;
+            eprintln!("Created log directory: {}", dir);
+        }
+    }
+    
+    // Test write permissions by creating a test file
+    for dir in &log_dirs {
+        let test_file = std::path::Path::new(dir).join(".write_test");
+        std::fs::write(&test_file, "test")?;
+        std::fs::remove_file(&test_file)?;
+    }
+    
+    Ok(())
+}
+
 fn main() {
+    // Initialize logging directories first - fail closed if can't create them
+    if let Err(e) = ensure_log_directories() {
+        eprintln!("FATAL: Failed to create log directories: {e}");
+        eprintln!("Failing closed for security - logs are required for audit trail");
+        std::process::exit(1);
+    }
+
     // Initialize structured logging (JSON) with env-configurable level
     // Falls back to sensible defaults without panicking if initialization fails
     if !tracing::dispatcher::has_been_set() {

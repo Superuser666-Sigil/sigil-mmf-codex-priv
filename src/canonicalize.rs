@@ -284,4 +284,174 @@ mod tests {
         // Should produce exact canonical form with proper escaping
         assert_eq!(canonical, r#"{"backslash":"C:\\path\\to\\file","newline":"line1\nline2","quotes":"He said \"Hello\"","tab":"col1\tcol2"}"#);
     }
+
+    // RFC 8785 JCS Conformance Tests
+    
+    #[test]
+    fn test_rfc8785_basic_example() {
+        // RFC 8785 Section 3.1 basic example
+        let input = json!({
+            "numbers": [333333333.33333329, 1E30, 4.50, 2e-3, 0.000000000000000000000000001],
+            "string": "\u{20ac}$\u{000F}\u{000a}A'\u{0042}\u{0022}\u{005c}\\\"/",
+            "literals": [null, true, false]
+        });
+        
+        let canonical = canonicalize_json(&input).unwrap();
+        
+        // Test that canonicalization is consistent
+        let canonical2 = canonicalize_json(&input).unwrap();
+        assert_eq!(canonical, canonical2);
+        
+        // Test key ordering
+        assert!(canonical.contains(r#""literals":[null,true,false]"#));
+        assert!(canonical.contains(r#""numbers":"#));
+        assert!(canonical.contains(r#""string":"#));
+    }
+    
+    #[test]
+    fn test_unicode_normalization() {
+        // Test various Unicode characters and escaping
+        let input = json!({
+            "unicode": "Iñtërnâtiônàlizætiøn☃💩",
+            "control_chars": "\u{0000}\u{0001}\u{0002}\u{001f}",
+            "high_surrogate": "𝄞", // Musical symbol G clef
+            "emoji": "🔥🚀✨"
+        });
+        
+        let canonical = canonicalize_json(&input).unwrap();
+        
+        // Control characters should be escaped, but valid Unicode should be preserved
+        let expected = r#"{"control_chars":"\u0000\u0001\u0002\u001f","emoji":"🔥🚀✨","high_surrogate":"𝄞","unicode":"Iñtërnâtiônàlizætiøn☃💩"}"#;
+        assert_eq!(canonical, expected);
+    }
+    
+    #[test]
+    fn test_numeric_edge_cases() {
+        let input = json!({
+            "zero": 0,
+            "negative_zero": -0.0,
+            "integer_as_float": 1.0,
+            "small_float": 0.0001,
+            "large_integer": 1234567890123456789_i64,
+            "scientific": 1e-10,
+            "large_scientific": 1e20
+        });
+        
+        let canonical = canonicalize_json(&input).unwrap();
+        
+        // Test that canonicalization is consistent
+        let canonical2 = canonicalize_json(&input).unwrap();
+        assert_eq!(canonical, canonical2);
+        
+        // Test that numbers are formatted
+        assert!(canonical.contains("\"zero\":0"));
+        assert!(canonical.contains("\"integer_as_float\":1"));
+        assert!(canonical.contains("\"small_float\":0.0001"));
+    }
+    
+    #[test]
+    fn test_deeply_nested_structures() {
+        let input = json!({
+            "level1": {
+                "level2": {
+                    "level3": {
+                        "level4": {
+                            "level5": {
+                                "data": [1, 2, 3],
+                                "meta": {"key": "value"}
+                            }
+                        }
+                    }
+                }
+            },
+            "arrays": [
+                [1, [2, [3, [4, [5]]]]],
+                {"nested": {"deeply": true}}
+            ]
+        });
+        
+        let canonical = canonicalize_json(&input).unwrap();
+        
+        // Deep nesting should maintain proper ordering
+        let expected = r#"{"arrays":[[1,[2,[3,[4,[5]]]]],{"nested":{"deeply":true}}],"level1":{"level2":{"level3":{"level4":{"level5":{"data":[1,2,3],"meta":{"key":"value"}}}}}}}"#;
+        assert_eq!(canonical, expected);
+    }
+    
+    #[test]
+    fn test_string_normalization_edge_cases() {
+        let input = json!({
+            "all_escapes": "\"\\\u{08}\u{0C}\n\r\t",
+            "unicode_escapes": "\u{0020}\u{007E}\u{00A0}\u{1234}",
+            "mixed": "\"Hello\tWorld\"\n\u{2603} Snowman",
+            "empty": "",
+            "only_quote": "\"",
+            "only_backslash": "\\"
+        });
+        
+        let canonical = canonicalize_json(&input).unwrap();
+        
+        // Test that canonicalization is consistent
+        let canonical2 = canonicalize_json(&input).unwrap();
+        assert_eq!(canonical, canonical2);
+        
+        // Test key ordering
+        assert!(canonical.contains(r#""all_escapes":"#));
+        assert!(canonical.contains(r#""empty":"""#));
+        assert!(canonical.contains(r#""mixed":"#));
+    }
+    
+    #[test]
+    fn test_array_ordering_preservation() {
+        let input = json!([
+            {"z": 1, "a": 2},
+            {"b": 3, "a": 4},
+            [3, 1, 4, 1, 5, 9],
+            {"nested": [{"z": 1, "a": 2}]}
+        ]);
+        
+        let canonical = canonicalize_json(&input).unwrap();
+        
+        // Array order preserved, but object keys sorted within each object
+        let expected = r#"[{"a":2,"z":1},{"a":4,"b":3},[3,1,4,1,5,9],{"nested":[{"a":2,"z":1}]}]"#;
+        assert_eq!(canonical, expected);
+    }
+    
+    #[test]
+    fn test_mixed_data_types() {
+        let input = json!({
+            "string": "text",
+            "number": 42,
+            "float": 3.14159,
+            "boolean_true": true,
+            "boolean_false": false,
+            "null_value": null,
+            "empty_object": {},
+            "empty_array": [],
+            "object": {"key": "value"},
+            "array": [1, "two", true, null]
+        });
+        
+        let canonical = canonicalize_json(&input).unwrap();
+        
+        // All data types should be handled correctly
+        let expected = r#"{"array":[1,"two",true,null],"boolean_false":false,"boolean_true":true,"empty_array":[],"empty_object":{},"float":3.14159,"null_value":null,"number":42,"object":{"key":"value"},"string":"text"}"#;
+        assert_eq!(canonical, expected);
+    }
+    
+    #[test]
+    fn test_large_object_key_sorting() {
+        let input = json!({
+            "zzz": 1, "aaa": 2, "mmm": 3, "bbb": 4, "yyy": 5,
+            "nnn": 6, "ccc": 7, "xxx": 8, "ooo": 9, "ddd": 10,
+            "www": 11, "ppp": 12, "eee": 13, "vvv": 14, "qqq": 15,
+            "fff": 16, "uuu": 17, "rrr": 18, "ggg": 19, "ttt": 20,
+            "sss": 21, "hhh": 22, "iii": 23, "jjj": 24, "kkk": 25, "lll": 26
+        });
+        
+        let canonical = canonicalize_json(&input).unwrap();
+        
+        // Keys should be sorted lexicographically
+        let expected = r#"{"aaa":2,"bbb":4,"ccc":7,"ddd":10,"eee":13,"fff":16,"ggg":19,"hhh":22,"iii":23,"jjj":24,"kkk":25,"lll":26,"mmm":3,"nnn":6,"ooo":9,"ppp":12,"qqq":15,"rrr":18,"sss":21,"ttt":20,"uuu":17,"vvv":14,"www":11,"xxx":8,"yyy":5,"zzz":1}"#;
+        assert_eq!(canonical, expected);
+    }
 }

@@ -138,7 +138,7 @@ pub fn dispatch(cli: Cli) {
             if file == "canon_store" || file == "store" {
                 // Validate records from CanonStore
                 use crate::canon_store::CanonStore;
-                use crate::canon_store_sled::CanonStoreSled;
+
                 use crate::license_validator::load_current_loa;
                 use std::sync::{Arc, Mutex};
 
@@ -150,10 +150,18 @@ pub fn dispatch(cli: Cli) {
                     }
                 };
 
-                let store = match CanonStoreSled::new("data/canon_store") {
+                // Use encrypted Sled backend with proper key management
+                let encryption_key = match crate::keys::KeyManager::get_encryption_key() {
+                    Ok(key) => key,
+                    Err(e) => {
+                        eprintln!("Failed to get encryption key: {e}");
+                        return;
+                    }
+                };
+                let store = match crate::canon_store_sled_encrypted::CanonStoreSled::new("data/canon_store", &encryption_key) {
                     Ok(s) => Arc::new(Mutex::new(s)),
                     Err(e) => {
-                        eprintln!("Failed to open canon store: {e}");
+                        eprintln!("Failed to open encrypted canon store: {e}");
                         return;
                     }
                 };
@@ -202,22 +210,8 @@ pub fn dispatch(cli: Cli) {
                     }
                 }
             } else {
-                // Legacy file-based validation for backwards compatibility
-                match crate::canon_loader::load_canon_entries(&file) {
-                    Ok(entries) => {
-                        println!("Validating {} entries from file {} (legacy format):", entries.len(), file);
-                        for (i, entry) in entries.iter().enumerate() {
-                            // Convert CanonNode to serde_json::Value for validation
-                            let entry_json =
-                                serde_json::to_value(entry).unwrap_or_else(|_| serde_json::json!({}));
-                            match crate::canon_validator::validate_entry(&entry_json) {
-                                Ok(_) => println!("Entry [{i}] valid."),
-                                Err(e) => eprintln!("Entry [{i}] failed: {e}"),
-                            }
-                        }
-                    }
-                    Err(e) => eprintln!("Failed to load file: {e}"),
-                }
+                eprintln!("File-based canon validation is deprecated. Use 'canon_store' or 'store' to validate records from the Canon store.");
+                eprintln!("Legacy format validation has been retired in favor of CanonStore-based operations.");
             }
         }
 
@@ -301,7 +295,7 @@ pub fn dispatch(cli: Cli) {
 
             let build_runtime =
                 || -> Result<Arc<RwLock<crate::sigil_runtime_core::SigilRuntimeCore>>, String> {
-                    use crate::canon_store_sled::CanonStoreSled;
+
                     use crate::config_loader::load_config;
                     use crate::runtime_config::{EnforcementMode, RuntimeConfig as RuntimeIRLConfig};
                     use crate::loa::LOA;
@@ -328,8 +322,11 @@ pub fn dispatch(cli: Cli) {
                         explanation_enabled: app_cfg.irl.explanation_enabled,
                     };
 
-                    let store = CanonStoreSled::new("data/canon_store")
-                        .map_err(|e| format!("Failed to create canon store: {e}"))?;
+                    // Use encrypted Sled backend with proper key management
+                    let encryption_key = crate::keys::KeyManager::get_encryption_key()
+                        .map_err(|e| format!("Failed to get encryption key: {e}"))?;
+                    let store = crate::canon_store_sled_encrypted::CanonStoreSled::new("data/canon_store", &encryption_key)
+                        .map_err(|e| format!("Failed to create encrypted canon store: {e}"))?;
                     let canon_store = Arc::new(Mutex::new(store));
 
                     let runtime =

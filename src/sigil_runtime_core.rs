@@ -4,7 +4,7 @@
 
 use crate::audit::AuditEvent;
 use crate::canon_store::CanonStore;
-use crate::canon_store_sled::CanonStoreSled;
+
 use crate::errors::{SafeLock, SigilResult};
 #[cfg(feature = "irl")]
 use crate::irl_explainer::{MultiModelExplainer, TrustExplanation};
@@ -17,6 +17,7 @@ use crate::irl_telemetry::IRLTelemetry;
 use crate::irl_trust_evaluator::TrustEvaluator;
 use crate::loa::LOA;
 use crate::log_sink::LogEvent;
+use std::str::FromStr;
 
 // Import the logistic trust model registry and features.  This will allow
 // SigilRuntimeCore to evaluate audit events using a real trust model
@@ -343,36 +344,42 @@ impl SigilRuntimeCore {
     }
 }
 
-// Missing function that is referenced in other modules
-pub fn run_sigil_session(_config: &crate::config_loader::MMFConfig) -> Result<(), String> {
-    // Create a default IRL config
-    let irl_config = IRLConfig::default();
+/// Run a Sigil session with proper config integration
+pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> Result<(), String> {
+    // Map config to IRL runtime config
+    let enforcement_mode = match config.irl.enforcement_mode.to_lowercase().as_str() {
+        "active" => EnforcementMode::Active,
+        "strict" => EnforcementMode::Strict,
+        _ => EnforcementMode::Active,
+    };
+    
+    let irl_config = IRLConfig {
+        active_model: config.irl.active_model.clone(),
+        threshold: config.irl.threshold,
+        enforcement_mode,
+        telemetry_enabled: config.irl.telemetry_enabled,
+        explanation_enabled: config.irl.explanation_enabled,
+    };
 
-    // Use the Sled-based canon store for persistence
-    let store = CanonStoreSled::new("data/canon_store")
-        .map_err(|e| format!("Failed to create canon store: {e}"))?;
+    // Use default canon store path, with proper encryption key management
+    let canon_store_path = "data/canon_store";
+    let encryption_key = crate::keys::KeyManager::get_encryption_key()
+        .map_err(|e| format!("Failed to get encryption key: {e}"))?;
+    let store = crate::canon_store_sled_encrypted::CanonStoreSled::new(canon_store_path, &encryption_key)
+        .map_err(|e| format!("Failed to create encrypted canon store: {e}"))?;
     let canon_store = Arc::new(Mutex::new(store));
 
-    // Initialize runtime core
-    let mut runtime = SigilRuntimeCore::new(LOA::Observer, canon_store, irl_config)
+    // Parse LOA from config string
+    let session_loa = LOA::from_str(&config.trust.default_loa).unwrap_or(LOA::Observer);
+    
+    // Initialize runtime core with config-based parameters
+    let mut runtime = SigilRuntimeCore::new(session_loa, canon_store, irl_config)
         .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
 
-    // Set up telemetry if enabled
-    #[cfg(feature = "irl")]
-    if config.irl.telemetry_enabled {
-        runtime.enable_telemetry();
-    }
-
-    // Set up explanation if enabled
-    #[cfg(feature = "irl")]
-    if config.irl.explanation_enabled {
-        runtime.enable_explanation();
-    }
-
-    // Refresh models from canon store
-    runtime
-        .refresh_models()
-        .map_err(|e| format!("Failed to refresh models: {e}"))?;
+    // For MVP: Use config-only threshold to avoid half-doing both config and canon
+    // TODO: Add model_refresh_from_canon flag to config later
+    runtime.threshold = config.irl.threshold;
+    println!("Using config-only threshold: {:.2}", runtime.threshold);
 
     // Start the runtime session
     println!("🚀 Sigil runtime session started");
@@ -386,6 +393,7 @@ pub fn run_sigil_session(_config: &crate::config_loader::MMFConfig) -> Result<()
     #[cfg(not(feature = "irl"))]
     println!("   Active Model: logistic-builtin");
     println!("   Threshold: {:.2}", runtime.threshold);
+    println!("   Canon Store: {}", canon_store_path);
 
     // Keep the runtime alive (in a real implementation, this would handle events)
     std::thread::sleep(std::time::Duration::from_secs(1));
