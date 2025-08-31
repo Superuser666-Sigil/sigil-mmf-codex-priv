@@ -104,6 +104,10 @@ mod tests {
     pub mod security_tests;
     pub mod module_tests;
     pub mod module_integration_test;
+    pub mod module_execution_comprehensive_test;
+    pub mod quorum_enforcement_test;
+    pub mod quorum_interactive_workflow_test;
+    pub mod key_lifecycle_test;
 }
 
 // Re-export key types for the two-phase ReasoningChain -> FrozenChain approach

@@ -7,7 +7,7 @@ use crate::csrf_protection::CSRFProtection;
 use crate::module_loader::ModuleContext;
 use axum::{
     Router,
-    extract::Extension,
+    extract::{Extension, Path},
     http::{StatusCode, HeaderMap},
     response::Json,
     routing::{get, post},
@@ -115,6 +115,27 @@ pub struct CSRFTokenResponse {
     error: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ProposalStatusResponse {
+    proposal_id: String,
+    entry: String,
+    content: String,
+    required_signatures: usize,
+    current_signatures: usize,
+    has_quorum: bool,
+    created_at: String,
+    expires_at: String,
+    status: String, // "pending", "committed", "expired"
+    signers: Vec<ProposalSigner>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProposalSigner {
+    witness_id: String,
+    signed_at: String,
+}
+
 // Add trust-related routes
 pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
     // Initialize security components
@@ -130,6 +151,7 @@ pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) 
         .route("/api/canon/user/write", post(canon_user_write))
         .route("/api/canon/system/propose", post(canon_system_propose))
         .route("/api/canon/system/attest", post(canon_system_attest))
+        .route("/api/canon/system/proposal/:id", get(get_proposal_status))
         .route("/api/csrf/token", post(mint_csrf_token))
         .layer(Extension(runtime))
         .layer(Extension(rate_limiter))
@@ -791,9 +813,99 @@ async fn canon_system_attest(
     let (has_quorum, current_sigs, required_k) = proposal_result;
     
     if has_quorum {
-        // TODO: Here we should commit the proposal to Canon
-        // For now, just log that quorum was reached
-        info!("Proposal {} reached quorum with {}/{} signatures", req.proposal_id, current_sigs, required_k);
+        info!("Proposal {} reached quorum with {}/{} signatures - committing to Canon", req.proposal_id, current_sigs, required_k);
+        
+        // Commit the proposal and write to Canon with proper witness signatures
+        let commit_result = {
+            let runtime = runtime.read().map_err(|e| {
+                error!("Runtime read lock poisoned during commit: {e}");
+                (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+            })?;
+            
+            let mut quorum_system = runtime.quorum_system.lock().map_err(|e| {
+                error!("Quorum system lock poisoned during commit: {e}");
+                (StatusCode::INTERNAL_SERVER_ERROR, "quorum system lock poisoned".to_string())
+            })?;
+            
+            // Commit the proposal (removes it from pending list after validation)
+            let committed_proposal = quorum_system.commit_proposal(&req.proposal_id)
+                .map_err(|e| (StatusCode::BAD_REQUEST, format!("Failed to commit proposal: {e}")))?;
+            
+            // Create a CanonicalRecord for the system change
+            let payload = serde_json::json!({
+                "entry": committed_proposal.entry,
+                "content": committed_proposal.content,
+                "proposal_id": committed_proposal.id,
+                "committed_at": chrono::Utc::now(),
+                "quorum_achieved": true,
+                "required_signatures": committed_proposal.required_k,
+                "actual_signatures": committed_proposal.signers.len()
+            });
+            
+            let mut record = crate::canonical_record::CanonicalRecord {
+                kind: "system_proposal".to_string(),
+                schema_version: 1,
+                id: committed_proposal.entry.clone(),
+                tenant: "system".to_string(),
+                ts: chrono::Utc::now(),
+                space: "system".to_string(),
+                payload,
+                links: vec![],
+                prev: None,
+                hash: String::new(),
+                sig: None,
+                pub_key: None,
+                witnesses: vec![],
+            };
+            
+            // Canonicalize and hash the record
+            let canonical_json = record.to_canonical_json()
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Canonicalization failed: {e}")))?;
+            
+            let mut hasher = sha2::Sha256::new();
+            hasher.update(canonical_json.as_bytes());
+            let digest = hasher.finalize();
+            record.hash = hex::encode(digest);
+            
+            // Sign with Root authority (system proposals require Root)
+            let signing_key = crate::keys::KeyManager::get_or_create_canon_key()
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get signing key: {e}")))?;
+            let (signature, public_key) = signing_key.sign_record(canonical_json.as_bytes());
+            
+            record.sig = Some(signature);
+            record.pub_key = Some(public_key);
+            
+            // Add witness records from the committed proposal
+            for witness_sig in &committed_proposal.signers {
+                record.witnesses.push(crate::canonical_record::WitnessRecord {
+                    witness_id: witness_sig.witness_id.clone(),
+                    signature: witness_sig.signature.clone(),
+                    timestamp: witness_sig.signed_at,
+                    authority: "SYSTEM_QUORUM".to_string(),
+                });
+            }
+            
+            // Persist to Canon store with system-level privileges
+            let mut canon_store = runtime.canon_store.lock().map_err(|e| {
+                error!("Canon store lock poisoned during commit: {e}");
+                (StatusCode::INTERNAL_SERVER_ERROR, "canon store lock poisoned".to_string())
+            })?;
+            
+            canon_store.add_record(record, &crate::loa::LOA::Root, true) // allow_operator_write=true for system
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to persist system record: {e}")))?;
+            
+            Ok::<(), (StatusCode, String)>(())
+        };
+        
+        match commit_result {
+            Ok(()) => {
+                info!("Successfully committed proposal {} to Canon", req.proposal_id);
+            },
+            Err(e) => {
+                error!("Failed to commit proposal {} to Canon: {:?}", req.proposal_id, e);
+                return Err(e);
+            }
+        }
     } else {
         info!("Proposal {} has {}/{} signatures (quorum not yet reached)", req.proposal_id, current_sigs, required_k);
     }
@@ -839,4 +951,83 @@ async fn mint_csrf_token(
         expires_in: 3600, // 1 hour
         error: None,
     }))
+}
+
+#[axum::debug_handler]
+async fn get_proposal_status(
+    Extension(runtime): Extension<Arc<RwLock<SigilRuntimeCore>>>,
+    Extension(rate_limiter): Extension<Arc<RateLimiter>>,
+    headers: HeaderMap,
+    Path(proposal_id): Path<String>,
+) -> Result<Json<ProposalStatusResponse>, (StatusCode, String)> {
+    // Rate limiting
+    let client_id = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("unknown");
+    
+    if !rate_limiter.check_rate_limit(client_id).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+    }
+    
+    // Validate proposal ID
+    if proposal_id.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "proposal_id cannot be empty".to_string()));
+    }
+    
+    // Get proposal status
+    let proposal_info = {
+        let runtime = runtime.read().map_err(|e| {
+            error!("Runtime read lock poisoned: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+        })?;
+        
+        let quorum_system = runtime.quorum_system.lock().map_err(|e| {
+            error!("Quorum system lock poisoned: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "quorum system lock poisoned".to_string())
+        })?;
+        
+        if let Some(proposal) = quorum_system.get_proposal(&proposal_id) {
+            let signers: Vec<ProposalSigner> = proposal.signers.iter().map(|signer| {
+                ProposalSigner {
+                    witness_id: signer.witness_id.clone(),
+                    signed_at: signer.signed_at.to_rfc3339(),
+                }
+            }).collect();
+            
+            let status = if proposal.has_quorum() {
+                "committed".to_string()
+            } else if proposal.is_expired() {
+                "expired".to_string()
+            } else {
+                "pending".to_string()
+            };
+            
+            Some(ProposalStatusResponse {
+                proposal_id: proposal.id.clone(),
+                entry: proposal.entry.clone(),
+                content: proposal.content.clone(),
+                required_signatures: proposal.required_k,
+                current_signatures: proposal.signers.len(),
+                has_quorum: proposal.has_quorum(),
+                created_at: proposal.created_at.to_rfc3339(),
+                expires_at: proposal.expires_at.to_rfc3339(),
+                status,
+                signers,
+                error: None,
+            })
+        } else {
+            None
+        }
+    };
+    
+    match proposal_info {
+        Some(response) => {
+            info!("Retrieved proposal status for: {}", proposal_id);
+            Ok(Json(response))
+        }
+        None => Err((StatusCode::NOT_FOUND, format!("Proposal not found: {}", proposal_id))),
+    }
 }
