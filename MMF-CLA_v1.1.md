@@ -10,7 +10,7 @@ This Agreement covers:
 - Canon definitions
 - Codex schemas
 - Module declarations
-- IRL rule modifications or enforcement logic
+- Trust evaluation rule modifications or enforcement logic
 
 ## 3. Contributor Representations
 By submitting a Contribution, you confirm that:
@@ -34,18 +34,18 @@ All accepted contributions must include:
 - Canon hash or divergence declaration (via sigil_manifest.toml)
 
 ## 6. Governance & Arbitration
-In the event of contributor disputes, Canon corruption, or violation of IRL structure:
+In the event of contributor disputes, Canon corruption, or violation of trust evaluation structure:
 - The matter will be reviewed by LOA:Root
 - If arbitration or override is required, LOA:Founder has final say over license restoration or lockout, subject to public audit
 - All judgments by LOA:Founder must be:
   - Signed with mnemonic key
-  - Justified in an IRL reasoning chain
+  - Justified in a verifiable reasoning chain
   - Auditable by LOA:Root and community forks
 
 ## 7. Termination
 Any contributor who knowingly:
 - Submits false Canon
-- Breaks IRL scoring integrity
+- Breaks trust evaluation integrity
 - Disables or obfuscates audit logging
 - Fails to include canonical linkage to the Sigil/MMF Codex Nexus core at https://github.com/Superuser666-Sigil/sigil-mmf-codex when claiming Sigil, MMF, or Codex 
   compatibility

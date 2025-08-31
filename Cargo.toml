@@ -2,7 +2,7 @@
 name = "mmf_sigil"
 version = "0.1.0"
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license-file = "MMF-CL_v1.1.md"
 resolver = "2"
 
 [[bin]]

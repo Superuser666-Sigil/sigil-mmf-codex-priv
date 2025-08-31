@@ -13,9 +13,9 @@ Derivative works may not override Canon without declaring scope, delta, and sour
   - Module name and author
   - Codex Nexus compatibility tag
 
-## 3. IRL Enforcement
-All logic derived from, extended from, or referencing Canon must pass through the IRL (Integrity Reasoning Layer).
-If IRL is bypassed, suppressed, or falsified, all rights under this license are revoked.
+## 3. Trust Evaluation Enforcement
+All logic derived from, extended from, or referencing Canon must pass through the trust evaluation system.
+If trust evaluation is bypassed, suppressed, or falsified, all rights under this license are revoked.
 
 ## 4. Attribution
 Any public deployment, publication, or reuse must include:
@@ -30,7 +30,7 @@ All community forks must retain:
 
 - Attribution
 - Trust boundary logic
-- IRL signature enforcement
+- Cryptographic signature enforcement
 - Codex-scoped audit trail logic
 
 Non-compliant forks must be labeled “Unofficial / Non-Canonical” and include a visible declaration of Canon departure.
@@ -39,10 +39,10 @@ Non-compliant forks must be labeled “Unofficial / Non-Canonical” and include
 You may not sell, rent, or license access to any MMF-CUL content unless separately licensed under MMF-CL or other authorized commercial agreements.
 
 ## 7. LOA:Founder Authority
-In cases of license breach, Canon falsification, or IRL trust subversion, the authority known as LOA:Founder may issue system lockouts or grant restoration.
+In cases of license breach, Canon falsification, or trust evaluation subversion, the authority known as LOA:Founder may issue system lockouts or grant restoration.
 All actions by LOA:Founder must:
 - Be signed with verifiable mnemonic credentials
-- Be bound to an IRL justification chain
+- Be bound to a verifiable justification chain
 - Be auditable by LOA:Root upon request
 
 LOA:Founder does not supersede Rule Zero. All Founder actions are enforceable by the same audit standards as any other runtime actor.

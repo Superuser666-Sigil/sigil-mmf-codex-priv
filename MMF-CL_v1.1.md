@@ -6,7 +6,7 @@ This license grants conditional rights to use, deploy, distribute, and commercia
 ## 2. Core Enforcement Requirements
 You may not bypass:
 - Canon structure
-- IRL trust scoring
+- Trust evaluation system
 - LOA enforcement
 - Codex audit traceability
 
@@ -21,11 +21,11 @@ You may:
 You must:
 - Disclose all Canon sources used
 - Declare Canon divergence if applicable
-- Retain IRL enforcement if touching any memory or Canon node
+- Retain trust evaluation enforcement if touching any memory or Canon node
 
 ## 4. Canonical Identity
 If you claim Codex compatibility, your system must:
-- Pass IRL enforcement
+- Pass trust evaluation enforcement
 - Declare its Canon scope
 - Include an up-to-date sigil_manifest.toml
 - Directly reference and attribute the current runtime at https://github.com/Superuser666-Sigil/sigil-mmf-codex
@@ -35,13 +35,13 @@ All contributors must agree to the MMF CLA (Contributor License Agreement).
 Minors may only contribute under advisory capacity or with documented guardian approval.
 
 ## 6. LOA:Founder Authority
-In cases of license breach, Canon falsification, or IRL trust subversion, the authority known as LOA:Founder may issue system lockouts or grant restoration.
+In cases of license breach, Canon falsification, or trust evaluation subversion, the authority known as LOA:Founder may issue system lockouts or grant restoration.
 All actions by LOA:Founder must:
 - Be signed with verifiable mnemonic credentials
-- Be bound to an IRL justification chain
+- Be bound to a verifiable justification chain
 - Be auditable by LOA:Root upon request
 
 LOA:Founder does not supersede Rule Zero. All Founder actions are enforceable by the same audit standards as any other runtime actor.
 
 ## 7. Termination and Enforcement
-Violation of trust scoring logic, Canon integrity, or audit obfuscation results in immediate license termination. Restoration requires LOA:Founder arbitration.
+Violation of trust evaluation logic, Canon integrity, or audit obfuscation results in immediate license termination. Restoration requires LOA:Founder arbitration.
