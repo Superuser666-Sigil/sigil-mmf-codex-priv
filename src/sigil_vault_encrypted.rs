@@ -28,7 +28,8 @@ impl SigilVault {
     pub fn new(path: &str) -> Self {
         let mut memory = HashMap::new();
         if Path::new(path).exists()
-            && let Ok(mut file) = File::open(path) {
+            && let Ok(mut file) = File::open(path)
+        {
             let key_opt = std::env::var("SIGIL_AES_KEY")
                 .ok()
                 .and_then(|k| decode_base64_key(&k).ok());
@@ -46,8 +47,7 @@ impl SigilVault {
                 } else {
                     raw
                 };
-                if let Ok(loaded) = serde_json::from_slice::<Vec<VaultMemoryBlock>>(&decrypted)
-                {
+                if let Ok(loaded) = serde_json::from_slice::<Vec<VaultMemoryBlock>>(&decrypted) {
                     for block in loaded {
                         memory.insert(block.id.clone(), block);
                     }
@@ -88,7 +88,9 @@ impl SigilVault {
 
     pub fn soft_delete(&mut self, id: &str, session_id: &str) -> bool {
         if let Some(block) = self.memory.get_mut(id)
-            && block.session_id == session_id && !block.deleted {
+            && block.session_id == session_id
+            && !block.deleted
+        {
             block.deleted = true;
             self.persist().ok(); // Fail silently
             return true;

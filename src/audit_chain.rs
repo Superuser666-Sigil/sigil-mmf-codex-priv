@@ -1,13 +1,13 @@
 use crate::loa::LoaLevel;
 use crate::module_scope::ModuleScope;
 use crate::sigil_integrity::WitnessSignature;
+use base64::Engine;
 use chrono::{DateTime, Utc};
+use ed25519_dalek::{Signer, Verifier};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use uuid::Uuid;
-use ed25519_dalek::{Signer, Verifier};
-use base64::Engine;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum Verdict {
@@ -46,7 +46,7 @@ pub struct ReasoningChain {
     pub witnesses: Vec<WitnessSignature>,
     // SECURITY: Ed25519 signature fields for content integrity
     pub content_hash: String,
-    pub signature: Option<String>, // Base64 encoded Ed25519 signature
+    pub signature: Option<String>,  // Base64 encoded Ed25519 signature
     pub public_key: Option<String>, // Base64 encoded Ed25519 public key
 }
 
@@ -157,24 +157,30 @@ impl ReasoningChain {
             "scope": self.scope,
             "witnesses": self.witnesses,
         });
-        
+
         let content_str = serde_json::to_string(&content_json)
             .map_err(|e| format!("Failed to serialize content: {e}"))?;
-        
+
         // Calculate SHA256 hash
         let mut hasher = sha2::Sha256::new();
         hasher.update(content_str.as_bytes());
         let hash_result = hasher.finalize();
         self.content_hash = format!("{:x}", hash_result);
-        
+
         // Sign the hash
         let signature = signing_key.sign(hash_result.as_slice());
-        self.signature = Some(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, signature.to_bytes()));
-        self.public_key = Some(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, signing_key.verifying_key().to_bytes()));
-        
+        self.signature = Some(base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            signature.to_bytes(),
+        ));
+        self.public_key = Some(base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            signing_key.verifying_key().to_bytes(),
+        ));
+
         Ok(())
     }
-    
+
     // SECURITY: Verify the signature
     pub fn verify_integrity(&self) -> Result<bool, String> {
         // Reconstruct content hash
@@ -189,46 +195,49 @@ impl ReasoningChain {
             "scope": self.scope,
             "witnesses": self.witnesses,
         });
-        
+
         let content_str = serde_json::to_string(&content_json)
             .map_err(|e| format!("Failed to serialize content: {e}"))?;
-        
+
         // Calculate expected hash
         let mut hasher = sha2::Sha256::new();
         hasher.update(content_str.as_bytes());
         let expected_hash = format!("{:x}", hasher.finalize());
-        
+
         // Verify hash matches
         if self.content_hash != expected_hash {
             return Ok(false);
         }
-        
+
         // Verify signature if present
         if let (Some(sig_b64), Some(pubkey_b64)) = (&self.signature, &self.public_key) {
-            let signature_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, sig_b64)
-                .map_err(|e| format!("Invalid signature encoding: {e}"))?;
-            let pubkey_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, pubkey_b64)
-                .map_err(|e| format!("Invalid public key encoding: {e}"))?;
-            
+            let signature_bytes =
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, sig_b64)
+                    .map_err(|e| format!("Invalid signature encoding: {e}"))?;
+            let pubkey_bytes =
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, pubkey_b64)
+                    .map_err(|e| format!("Invalid public key encoding: {e}"))?;
+
             if signature_bytes.len() != 64 || pubkey_bytes.len() != 32 {
                 return Ok(false);
             }
-            
+
             // Convert Vec<u8> to arrays
             let mut sig_array = [0u8; 64];
             sig_array.copy_from_slice(&signature_bytes);
             let mut pubkey_array = [0u8; 32];
             pubkey_array.copy_from_slice(&pubkey_bytes);
-            
+
             let signature = ed25519_dalek::Signature::from_bytes(&sig_array);
             let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&pubkey_array)
                 .map_err(|e| format!("Invalid public key format: {e}"))?;
-            
+
             // Verify signature
-            let hash_bytes = hex::decode(&self.content_hash)
-                .map_err(|e| format!("Invalid hash format: {e}"))?;
-            
-            verifying_key.verify(&hash_bytes, &signature)
+            let hash_bytes =
+                hex::decode(&self.content_hash).map_err(|e| format!("Invalid hash format: {e}"))?;
+
+            verifying_key
+                .verify(&hash_bytes, &signature)
                 .map(|_| true)
                 .map_err(|e| format!("Signature verification failed: {e}"))
         } else {
@@ -376,14 +385,14 @@ impl FrozenChain {
 
         // SECURITY: Sign the content hash using a freshly generated Ed25519 key.
         // In a production system this key should be provided by a trusted authority.
-        use ed25519_dalek::{SigningKey, Signer};
         use base64::Engine;
+        use ed25519_dalek::{Signer, SigningKey};
         let mut rng = rand::rngs::OsRng;
         let signing_key = SigningKey::generate(&mut rng);
         let verifying_key = signing_key.verifying_key();
 
-        let hash_bytes = hex::decode(&content_hash)
-            .map_err(|e| format!("Invalid content hash: {e}"))?;
+        let hash_bytes =
+            hex::decode(&content_hash).map_err(|e| format!("Invalid content hash: {e}"))?;
         let sig = signing_key.sign(&hash_bytes);
         let signature_b64 = base64::engine::general_purpose::STANDARD.encode(sig.to_bytes());
         let pub_key_b64 =

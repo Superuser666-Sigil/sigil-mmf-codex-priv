@@ -1,7 +1,7 @@
 use crate::canon_store::CanonStore;
+use crate::canonical_record::CanonicalRecord;
 use crate::errors::{SigilError, SigilResult};
 use crate::loa::{LOA, can_read_canon, can_write_canon};
-use crate::canonical_record::CanonicalRecord;
 use log::{error, info, warn};
 use sled::Db;
 use std::sync::Arc;

@@ -53,7 +53,11 @@ pub fn run_loader(file_path: &str, license_token: &str) -> Result<(), String> {
             .map_err(|e| format!("Failed to create canonical record: {e}"))?;
 
         store
-            .add_record(record, &session.loa, config.trust.allow_operator_canon_write)
+            .add_record(
+                record,
+                &session.loa,
+                config.trust.allow_operator_canon_write,
+            )
             .map_err(|e| format!("Canon record write failed: {e}"))?;
     }
 

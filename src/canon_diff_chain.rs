@@ -1,5 +1,5 @@
-use crate::canonical_record::CanonicalRecord;
 use crate::canon_store::CanonStore;
+use crate::canonical_record::CanonicalRecord;
 use crate::loa::LOA;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -9,7 +9,10 @@ pub fn semantic_diff(a: &CanonicalRecord, b: &CanonicalRecord) -> HashMap<String
     let mut diffs = HashMap::new();
 
     if a.schema_version != b.schema_version {
-        diffs.insert("schema_version".into(), format!("{} -> {}", a.schema_version, b.schema_version));
+        diffs.insert(
+            "schema_version".into(),
+            format!("{} -> {}", a.schema_version, b.schema_version),
+        );
     }
 
     if a.kind != b.kind {
@@ -45,24 +48,38 @@ pub fn semantic_diff(a: &CanonicalRecord, b: &CanonicalRecord) -> HashMap<String
 
 /// Diff a Canon record by ID using CanonStore
 /// This compares the current record with its predecessor (prev field)
-pub fn diff_by_id_with_store(canon_store: Arc<Mutex<dyn CanonStore>>, id: &str, requester_loa: &LOA) -> Result<HashMap<String, String>, String> {
-    let store = canon_store.lock()
+pub fn diff_by_id_with_store(
+    canon_store: Arc<Mutex<dyn CanonStore>>,
+    id: &str,
+    requester_loa: &LOA,
+) -> Result<HashMap<String, String>, String> {
+    let store = canon_store
+        .lock()
         .map_err(|_| "Failed to acquire canon store lock".to_string())?;
 
     // Load the current record
-    let current_record = store.load_record(id, requester_loa)
-        .ok_or_else(|| format!("Record with ID '{}' not found or insufficient permissions", id))?;
+    let current_record = store.load_record(id, requester_loa).ok_or_else(|| {
+        format!(
+            "Record with ID '{}' not found or insufficient permissions",
+            id
+        )
+    })?;
 
     // Check if there's a previous version
     if let Some(prev_id) = &current_record.prev {
-        let previous_record = store.load_record(prev_id, requester_loa)
-            .ok_or_else(|| format!("Previous record with ID '{}' not found or insufficient permissions", prev_id))?;
+        let previous_record = store.load_record(prev_id, requester_loa).ok_or_else(|| {
+            format!(
+                "Previous record with ID '{}' not found or insufficient permissions",
+                prev_id
+            )
+        })?;
 
         Ok(semantic_diff(&previous_record, &current_record))
     } else {
-        Ok(HashMap::from([
-            ("status".into(), "No previous version found - this is the initial record".into())
-        ]))
+        Ok(HashMap::from([(
+            "status".into(),
+            "No previous version found - this is the initial record".into(),
+        )]))
     }
 }
 

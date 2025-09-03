@@ -1,25 +1,25 @@
 use crate::audit::AuditEvent;
-use crate::loa::LOA;
-use crate::sigil_runtime_core::SigilRuntimeCore;
-use crate::input_validator::InputValidator;
-use crate::rate_limiter::RateLimiter;
 use crate::csrf_protection::CSRFProtection;
+use crate::input_validator::InputValidator;
+use crate::loa::LOA;
 use crate::module_loader::ModuleContext;
+use crate::rate_limiter::RateLimiter;
+use crate::sigil_runtime_core::SigilRuntimeCore;
 use axum::{
     Router,
     extract::{Extension, Path},
-    http::{StatusCode, HeaderMap},
+    http::{HeaderMap, StatusCode},
     response::Json,
     routing::{get, post},
 };
+use hex;
 use log::{error, info};
 use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 use std::str::FromStr;
 use std::sync::OnceLock;
 use std::sync::{Arc, RwLock};
-use sha2::{Digest};
-use hex;
 
 #[derive(Debug, Deserialize)]
 pub struct TrustCheckRequest {
@@ -141,7 +141,7 @@ pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) 
     // Initialize security components
     let rate_limiter = Arc::new(RateLimiter::new(100, 60)); // 100 requests per minute
     let csrf_protection = Arc::new(CSRFProtection::new(3600)); // 1 hour token lifetime
-    
+
     router
         .route("/api/trust/check", post(check_trust))
         .route("/api/trust/status", get(trust_status))
@@ -163,7 +163,7 @@ pub fn build_trust_router(runtime: Arc<RwLock<SigilRuntimeCore>>) -> Router {
     // Initialize security components
     let rate_limiter = Arc::new(RateLimiter::new(100, 60)); // 100 requests per minute
     let csrf_protection = Arc::new(CSRFProtection::new(3600)); // 1 hour token lifetime
-    
+
     Router::new()
         // current endpoints
         .route("/api/trust/check", post(check_trust))
@@ -194,15 +194,27 @@ async fn check_trust(
     Json(req): Json<TrustCheckRequest>,
 ) -> Result<Json<TrustCheckResponse>, (StatusCode, String)> {
     // Rate limiting check
-    let client_id = headers.get("x-forwarded-for")
+    let client_id = headers
+        .get("x-forwarded-for")
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
-    
-    if !rate_limiter.check_rate_limit(client_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
-        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+
+    if !rate_limiter
+        .check_rate_limit(client_id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Rate limit check failed: {e}"),
+            )
+        })?
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded".to_string(),
+        ));
     }
-    
+
     // CSRF protection check
     if let Some(csrf_token) = headers.get("x-csrf-token") {
         if let Ok(token) = csrf_token.to_str() {
@@ -211,7 +223,7 @@ async fn check_trust(
             }
         }
     }
-    
+
     // Validate input
     let validator = InputValidator::new();
     if let Err(e) = validator.validate_trust_request(&crate::input_validator::TrustCheckRequest {
@@ -221,9 +233,12 @@ async fn check_trust(
         session_id: req.session_id.clone(),
         loa: req.loa.clone(),
     }) {
-        return Err((StatusCode::BAD_REQUEST, format!("Input validation failed: {e}")));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Input validation failed: {e}"),
+        ));
     }
-    
+
     // increment metric
     init_metrics();
     if let Some(counter) = TRUST_CHECK_TOTAL.get() {
@@ -288,15 +303,27 @@ async fn register_extension_api(
     Json(req): Json<ExtensionRegisterRequest>,
 ) -> Result<Json<ExtensionRegisterResponse>, (StatusCode, String)> {
     // Rate limiting check
-    let client_id = headers.get("x-forwarded-for")
+    let client_id = headers
+        .get("x-forwarded-for")
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
-    
-    if !rate_limiter.check_rate_limit(client_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
-        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+
+    if !rate_limiter
+        .check_rate_limit(client_id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Rate limit check failed: {e}"),
+            )
+        })?
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded".to_string(),
+        ));
     }
-    
+
     // CSRF protection check
     if let Some(csrf_token) = headers.get("x-csrf-token") {
         if let Ok(token) = csrf_token.to_str() {
@@ -306,16 +333,21 @@ async fn register_extension_api(
             }
         }
     }
-    
+
     // Input validation using the validator
     let validator = InputValidator::new();
-    if let Err(e) = validator.validate_extension_registration(&crate::input_validator::ExtensionRegisterRequest {
-        name: req.name.clone(),
-        loa: req.loa.clone(),
-    }) {
-        return Err((StatusCode::BAD_REQUEST, format!("Input validation failed: {e}")));
+    if let Err(e) = validator.validate_extension_registration(
+        &crate::input_validator::ExtensionRegisterRequest {
+            name: req.name.clone(),
+            loa: req.loa.clone(),
+        },
+    ) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Input validation failed: {e}"),
+        ));
     }
-    
+
     let _loa = match LOA::from_str(&req.loa) {
         Ok(loa) => loa,
         Err(_) => {
@@ -372,11 +404,10 @@ static TRUST_CHECK_TOTAL: OnceLock<IntCounter> = OnceLock::new();
 fn init_metrics() {
     let registry = METRICS_REGISTRY.get_or_init(Registry::new);
     let counter = TRUST_CHECK_TOTAL.get_or_init(|| {
-        IntCounter::new("trust_check_total", "Total trust check requests")
-            .unwrap_or_else(|_| {
-                error!("Failed to create trust check counter");
-                IntCounter::new("trust_check_total_fallback", "Fallback counter").unwrap()
-            })
+        IntCounter::new("trust_check_total", "Total trust check requests").unwrap_or_else(|_| {
+            error!("Failed to create trust check counter");
+            IntCounter::new("trust_check_total_fallback", "Fallback counter").unwrap()
+        })
     });
     let _ = registry.register(Box::new(counter.clone()));
 }
@@ -403,12 +434,15 @@ async fn get_audit(
     // SECURITY: Verify signature before returning audit data
     // This is a placeholder - in a real implementation, you'd load the audit from storage
     // and verify its signature using the ReasoningChain::verify_integrity() method
-    
+
     let _runtime = runtime.read().map_err(|e| {
         error!("Runtime read lock poisoned: {e}");
-        (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "runtime lock poisoned".to_string(),
+        )
     })?;
-    
+
     // For now, return a mock response
     Ok(Json(serde_json::json!({
         "audit_id": audit_id,
@@ -432,12 +466,23 @@ async fn run_module(
         .or_else(|| headers.get("x-real-ip"))
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
-    
-    if !rate_limiter.check_rate_limit(client_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
-        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+
+    if !rate_limiter
+        .check_rate_limit(client_id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Rate limit check failed: {e}"),
+            )
+        })?
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded".to_string(),
+        ));
     }
-    
+
     // CSRF protection
     if let Some(csrf_token) = headers.get("x-csrf-token") {
         if let Ok(token) = csrf_token.to_str() {
@@ -446,22 +491,28 @@ async fn run_module(
             }
         }
     }
-    
+
     // Validate user_id is not empty
     if req.user_id.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "user_id cannot be empty".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "user_id cannot be empty".to_string(),
+        ));
     }
-    
+
     // Get recent requests count first
     let recent_requests = rate_limiter.get_request_count(client_id).await;
-    
+
     // Create audit event and evaluate trust, then execute module
     let module_result = {
         let runtime = runtime.read().map_err(|e| {
             error!("Runtime read lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "runtime lock poisoned".to_string(),
+            )
         })?;
-        
+
         let event = AuditEvent::new(
             &req.user_id,
             "module_execute",
@@ -469,13 +520,16 @@ async fn run_module(
             &req.session_id,
             &runtime.loa,
         );
-        
+
         let evaluation = runtime.evaluate_event(&event, recent_requests);
-        
+
         if !evaluation.allowed {
-            return Err((StatusCode::FORBIDDEN, "Module execution denied by trust evaluation".to_string()));
+            return Err((
+                StatusCode::FORBIDDEN,
+                "Module execution denied by trust evaluation".to_string(),
+            ));
         }
-        
+
         // Create module execution context
         let module_context = ModuleContext {
             session_id: req.session_id.clone(),
@@ -483,25 +537,43 @@ async fn run_module(
             loa: runtime.loa.clone(),
             input: req.input.clone(),
         };
-        
+
         // Execute the module through the registry
         let module_registry = runtime.module_registry.lock().map_err(|e| {
             error!("Module registry lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "module registry lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "module registry lock poisoned".to_string(),
+            )
         })?;
-        
-        module_registry.run_module(&module_name, &module_context)
+
+        module_registry
+            .run_module(&module_name, &module_context)
             .map_err(|e| match e {
-                crate::errors::SigilError::Internal { message } if message.contains("not found") => 
-                    (StatusCode::NOT_FOUND, format!("Module '{}' not found", module_name)),
-                crate::errors::SigilError::InsufficientLoa { .. } => 
-                    (StatusCode::FORBIDDEN, format!("Insufficient LOA for module '{}'", module_name)),
-                _ => (StatusCode::INTERNAL_SERVER_ERROR, format!("Module execution failed: {}", e))
+                crate::errors::SigilError::Internal { message }
+                    if message.contains("not found") =>
+                {
+                    (
+                        StatusCode::NOT_FOUND,
+                        format!("Module '{}' not found", module_name),
+                    )
+                }
+                crate::errors::SigilError::InsufficientLoa { .. } => (
+                    StatusCode::FORBIDDEN,
+                    format!("Insufficient LOA for module '{}'", module_name),
+                ),
+                _ => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Module execution failed: {}", e),
+                ),
             })?
     };
-    
-    info!("Successfully executed module '{}' for user '{}'", module_name, req.user_id);
-    
+
+    info!(
+        "Successfully executed module '{}' for user '{}'",
+        module_name, req.user_id
+    );
+
     Ok(Json(ModuleRunResponse {
         output: module_result,
         error: None,
@@ -522,12 +594,23 @@ async fn canon_user_write(
         .or_else(|| headers.get("x-real-ip"))
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
-    
-    if !rate_limiter.check_rate_limit(client_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
-        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+
+    if !rate_limiter
+        .check_rate_limit(client_id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Rate limit check failed: {e}"),
+            )
+        })?
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded".to_string(),
+        ));
     }
-    
+
     if let Some(csrf_token) = headers.get("x-csrf-token") {
         if let Ok(token) = csrf_token.to_str() {
             if !csrf_protection.validate_token(&req.session_id, token).await {
@@ -535,7 +618,7 @@ async fn canon_user_write(
             }
         }
     }
-    
+
     // Validate key and value are not empty
     if req.key.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "key cannot be empty".to_string()));
@@ -543,7 +626,7 @@ async fn canon_user_write(
     if req.value.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "value cannot be empty".to_string()));
     }
-    
+
     // Create audit event for canon write
     let event = AuditEvent::new(
         "user",
@@ -552,35 +635,44 @@ async fn canon_user_write(
         &req.session_id,
         &LOA::Observer, // Default LOA for user writes
     );
-    
+
     // Evaluate trust for canon write
     let recent_requests = rate_limiter.get_request_count(client_id).await;
     let evaluation = {
         let runtime = runtime.read().map_err(|e| {
             error!("Runtime read lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "runtime lock poisoned".to_string(),
+            )
         })?;
         runtime.evaluate_event(&event, recent_requests)
     };
-    
+
     if !evaluation.allowed {
-        return Err((StatusCode::FORBIDDEN, "Canon write denied by trust evaluation".to_string()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Canon write denied by trust evaluation".to_string(),
+        ));
     }
-    
+
     // Now implement real canon write with signing
     let write_result = {
         let runtime = runtime.read().map_err(|e| {
             error!("Runtime read lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "runtime lock poisoned".to_string(),
+            )
         })?;
-        
+
         // Create a CanonicalRecord from the key/value
         let payload = serde_json::json!({
             "key": req.key,
             "value": req.value,
             "session_id": req.session_id
         });
-        
+
         let mut record = crate::canonical_record::CanonicalRecord {
             kind: "user_data".to_string(),
             schema_version: 1,
@@ -596,38 +688,55 @@ async fn canon_user_write(
             pub_key: None,       // Will be set from key store
             witnesses: vec![],
         };
-        
+
         // Canonicalize → hash → sign → persist CanonicalRecord
-        let canonical_json = record.to_canonical_json()
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Canonicalization failed: {e}")))?;
-        
+        let canonical_json = record.to_canonical_json().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Canonicalization failed: {e}"),
+            )
+        })?;
+
         // Compute hash
         let mut hasher = sha2::Sha256::new();
         hasher.update(canonical_json.as_bytes());
         let digest = hasher.finalize();
         record.hash = hex::encode(digest);
-        
+
         // Sign with active key from KeyStore
-        let signing_key = crate::keys::KeyManager::get_or_create_canon_key()
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get signing key: {e}")))?;
-        
+        let signing_key = crate::keys::KeyManager::get_or_create_canon_key().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get signing key: {e}"),
+            )
+        })?;
+
         let (signature, public_key) = signing_key.sign_record(canonical_json.as_bytes());
-        
+
         record.sig = Some(signature);
         record.pub_key = Some(public_key);
-        
+
         // Persist to Canon Store
         let mut canon_store = runtime.canon_store.lock().map_err(|e| {
             error!("Canon store lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "canon store lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "canon store lock poisoned".to_string(),
+            )
         })?;
-        
-        canon_store.add_record(record, &LOA::Observer, false)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to persist record: {e}")))?;
-        
+
+        canon_store
+            .add_record(record, &LOA::Observer, false)
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to persist record: {e}"),
+                )
+            })?;
+
         Ok::<(), (StatusCode, String)>(())
     };
-    
+
     match write_result {
         Ok(()) => {
             info!("Successfully wrote canon record for key: {}", req.key);
@@ -635,8 +744,8 @@ async fn canon_user_write(
                 success: true,
                 error: None,
             }))
-        },
-        Err(e) => Err(e)
+        }
+        Err(e) => Err(e),
     }
 }
 
@@ -654,31 +763,51 @@ async fn canon_system_propose(
         .or_else(|| headers.get("x-real-ip"))
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
-    
-    if !rate_limiter.check_rate_limit(client_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
-        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+
+    if !rate_limiter
+        .check_rate_limit(client_id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Rate limit check failed: {e}"),
+            )
+        })?
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded".to_string(),
+        ));
     }
-    
+
     if let Some(csrf_token) = headers.get("x-csrf-token") {
         if let Ok(token) = csrf_token.to_str() {
-            if !csrf_protection.validate_token("system_propose", token).await {
+            if !csrf_protection
+                .validate_token("system_propose", token)
+                .await
+            {
                 return Err((StatusCode::FORBIDDEN, "Invalid CSRF token".to_string()));
             }
         }
     }
-    
+
     // Validate required fields
     if req.entry.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "entry cannot be empty".to_string()));
     }
     if req.content.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "content cannot be empty".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "content cannot be empty".to_string(),
+        ));
     }
     if req.required_k == 0 {
-        return Err((StatusCode::BAD_REQUEST, "required_k must be greater than 0".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "required_k must be greater than 0".to_string(),
+        ));
     }
-    
+
     // Create audit event for system proposal
     let event = AuditEvent::new(
         "system",
@@ -687,39 +816,60 @@ async fn canon_system_propose(
         "system_propose",
         &LOA::Operator, // System proposals require Operator LOA
     );
-    
+
     // Evaluate trust for system proposal
     let recent_requests = rate_limiter.get_request_count(client_id).await;
     let evaluation = {
         let runtime = runtime.read().map_err(|e| {
             error!("Runtime read lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "runtime lock poisoned".to_string(),
+            )
         })?;
         runtime.evaluate_event(&event, recent_requests)
     };
-    
+
     if !evaluation.allowed {
-        return Err((StatusCode::FORBIDDEN, "System proposal denied by trust evaluation".to_string()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "System proposal denied by trust evaluation".to_string(),
+        ));
     }
-    
+
     // Create proposal in the quorum system
     let proposal_id = {
         let runtime = runtime.read().map_err(|e| {
             error!("Runtime read lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "runtime lock poisoned".to_string(),
+            )
         })?;
-        
+
         let mut quorum_system = runtime.quorum_system.lock().map_err(|e| {
             error!("Quorum system lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "quorum system lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "quorum system lock poisoned".to_string(),
+            )
         })?;
-        
-        quorum_system.create_proposal(req.entry, req.content, req.required_k)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create proposal: {e}")))?
+
+        quorum_system
+            .create_proposal(req.entry, req.content, req.required_k)
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to create proposal: {e}"),
+                )
+            })?
     };
-    
-    info!("Created system proposal {} requiring {}-of-n signatures", proposal_id, req.required_k);
-    
+
+    info!(
+        "Created system proposal {} requiring {}-of-n signatures",
+        proposal_id, req.required_k
+    );
+
     Ok(Json(SystemProposalResponse {
         proposal_id,
         error: None,
@@ -740,12 +890,23 @@ async fn canon_system_attest(
         .or_else(|| headers.get("x-real-ip"))
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
-    
-    if !rate_limiter.check_rate_limit(client_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
-        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+
+    if !rate_limiter
+        .check_rate_limit(client_id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Rate limit check failed: {e}"),
+            )
+        })?
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded".to_string(),
+        ));
     }
-    
+
     if let Some(csrf_token) = headers.get("x-csrf-token") {
         if let Ok(token) = csrf_token.to_str() {
             if !csrf_protection.validate_token(&req.witness_id, token).await {
@@ -753,18 +914,27 @@ async fn canon_system_attest(
             }
         }
     }
-    
+
     // Validate required fields
     if req.proposal_id.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "proposal_id cannot be empty".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "proposal_id cannot be empty".to_string(),
+        ));
     }
     if req.signature.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "signature cannot be empty".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "signature cannot be empty".to_string(),
+        ));
     }
     if req.witness_id.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "witness_id cannot be empty".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "witness_id cannot be empty".to_string(),
+        ));
     }
-    
+
     // Create audit event for system attestation
     let event = AuditEvent::new(
         &req.witness_id,
@@ -773,64 +943,99 @@ async fn canon_system_attest(
         "system_attest",
         &LOA::Operator, // System attestations require Operator LOA
     );
-    
+
     // Evaluate trust for system attestation
     let recent_requests = rate_limiter.get_request_count(client_id).await;
     let evaluation = {
         let runtime = runtime.read().map_err(|e| {
             error!("Runtime read lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "runtime lock poisoned".to_string(),
+            )
         })?;
         runtime.evaluate_event(&event, recent_requests)
     };
-    
+
     if !evaluation.allowed {
-        return Err((StatusCode::FORBIDDEN, "System attestation denied by trust evaluation".to_string()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "System attestation denied by trust evaluation".to_string(),
+        ));
     }
-    
+
     // Add signature to the proposal and check if quorum is reached
     let proposal_result = {
         let runtime = runtime.read().map_err(|e| {
             error!("Runtime read lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "runtime lock poisoned".to_string(),
+            )
         })?;
-        
+
         let mut quorum_system = runtime.quorum_system.lock().map_err(|e| {
             error!("Quorum system lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "quorum system lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "quorum system lock poisoned".to_string(),
+            )
         })?;
-        
+
         // Add the signature to the proposal
-        quorum_system.add_signature(&req.proposal_id, req.witness_id.clone(), req.signature)
-            .map_err(|e| (StatusCode::BAD_REQUEST, format!("Failed to add signature: {e}")))?;
-        
+        quorum_system
+            .add_signature(&req.proposal_id, req.witness_id.clone(), req.signature)
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("Failed to add signature: {e}"),
+                )
+            })?;
+
         // Check if the proposal now has quorum and can be committed
-        quorum_system.get_proposal(&req.proposal_id)
+        quorum_system
+            .get_proposal(&req.proposal_id)
             .map(|p| (p.has_quorum(), p.get_signature_count(), p.required_k))
             .ok_or_else(|| (StatusCode::NOT_FOUND, "Proposal not found".to_string()))?
     };
-    
+
     let (has_quorum, current_sigs, required_k) = proposal_result;
-    
+
     if has_quorum {
-        info!("Proposal {} reached quorum with {}/{} signatures - committing to Canon", req.proposal_id, current_sigs, required_k);
-        
+        info!(
+            "Proposal {} reached quorum with {}/{} signatures - committing to Canon",
+            req.proposal_id, current_sigs, required_k
+        );
+
         // Commit the proposal and write to Canon with proper witness signatures
         let commit_result = {
             let runtime = runtime.read().map_err(|e| {
                 error!("Runtime read lock poisoned during commit: {e}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "runtime lock poisoned".to_string(),
+                )
             })?;
-            
+
             let mut quorum_system = runtime.quorum_system.lock().map_err(|e| {
                 error!("Quorum system lock poisoned during commit: {e}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "quorum system lock poisoned".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "quorum system lock poisoned".to_string(),
+                )
             })?;
-            
+
             // Commit the proposal (removes it from pending list after validation)
-            let committed_proposal = quorum_system.commit_proposal(&req.proposal_id)
-                .map_err(|e| (StatusCode::BAD_REQUEST, format!("Failed to commit proposal: {e}")))?;
-            
+            let committed_proposal =
+                quorum_system
+                    .commit_proposal(&req.proposal_id)
+                    .map_err(|e| {
+                        (
+                            StatusCode::BAD_REQUEST,
+                            format!("Failed to commit proposal: {e}"),
+                        )
+                    })?;
+
             // Create a CanonicalRecord for the system change
             let payload = serde_json::json!({
                 "entry": committed_proposal.entry,
@@ -841,7 +1046,7 @@ async fn canon_system_attest(
                 "required_signatures": committed_proposal.required_k,
                 "actual_signatures": committed_proposal.signers.len()
             });
-            
+
             let mut record = crate::canonical_record::CanonicalRecord {
                 kind: "system_proposal".to_string(),
                 schema_version: 1,
@@ -857,59 +1062,87 @@ async fn canon_system_attest(
                 pub_key: None,
                 witnesses: vec![],
             };
-            
+
             // Canonicalize and hash the record
-            let canonical_json = record.to_canonical_json()
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Canonicalization failed: {e}")))?;
-            
+            let canonical_json = record.to_canonical_json().map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Canonicalization failed: {e}"),
+                )
+            })?;
+
             let mut hasher = sha2::Sha256::new();
             hasher.update(canonical_json.as_bytes());
             let digest = hasher.finalize();
             record.hash = hex::encode(digest);
-            
+
             // Sign with Root authority (system proposals require Root)
-            let signing_key = crate::keys::KeyManager::get_or_create_canon_key()
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get signing key: {e}")))?;
+            let signing_key = crate::keys::KeyManager::get_or_create_canon_key().map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to get signing key: {e}"),
+                )
+            })?;
             let (signature, public_key) = signing_key.sign_record(canonical_json.as_bytes());
-            
+
             record.sig = Some(signature);
             record.pub_key = Some(public_key);
-            
+
             // Add witness records from the committed proposal
             for witness_sig in &committed_proposal.signers {
-                record.witnesses.push(crate::canonical_record::WitnessRecord {
-                    witness_id: witness_sig.witness_id.clone(),
-                    signature: witness_sig.signature.clone(),
-                    timestamp: witness_sig.signed_at,
-                    authority: "SYSTEM_QUORUM".to_string(),
-                });
+                record
+                    .witnesses
+                    .push(crate::canonical_record::WitnessRecord {
+                        witness_id: witness_sig.witness_id.clone(),
+                        signature: witness_sig.signature.clone(),
+                        timestamp: witness_sig.signed_at,
+                        authority: "SYSTEM_QUORUM".to_string(),
+                    });
             }
-            
+
             // Persist to Canon store with system-level privileges
             let mut canon_store = runtime.canon_store.lock().map_err(|e| {
                 error!("Canon store lock poisoned during commit: {e}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "canon store lock poisoned".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "canon store lock poisoned".to_string(),
+                )
             })?;
-            
-            canon_store.add_record(record, &crate::loa::LOA::Root, true) // allow_operator_write=true for system
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to persist system record: {e}")))?;
-            
+
+            canon_store
+                .add_record(record, &crate::loa::LOA::Root, true) // allow_operator_write=true for system
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to persist system record: {e}"),
+                    )
+                })?;
+
             Ok::<(), (StatusCode, String)>(())
         };
-        
+
         match commit_result {
             Ok(()) => {
-                info!("Successfully committed proposal {} to Canon", req.proposal_id);
-            },
+                info!(
+                    "Successfully committed proposal {} to Canon",
+                    req.proposal_id
+                );
+            }
             Err(e) => {
-                error!("Failed to commit proposal {} to Canon: {:?}", req.proposal_id, e);
+                error!(
+                    "Failed to commit proposal {} to Canon: {:?}",
+                    req.proposal_id, e
+                );
                 return Err(e);
             }
         }
     } else {
-        info!("Proposal {} has {}/{} signatures (quorum not yet reached)", req.proposal_id, current_sigs, required_k);
+        info!(
+            "Proposal {} has {}/{} signatures (quorum not yet reached)",
+            req.proposal_id, current_sigs, required_k
+        );
     }
-    
+
     Ok(Json(SystemAttestResponse {
         success: true,
         error: None,
@@ -929,23 +1162,41 @@ async fn mint_csrf_token(
         .or_else(|| headers.get("x-real-ip"))
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
-    
-    if !rate_limiter.check_rate_limit(client_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
-        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+
+    if !rate_limiter
+        .check_rate_limit(client_id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Rate limit check failed: {e}"),
+            )
+        })?
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded".to_string(),
+        ));
     }
-    
+
     // Validate session_id is not empty
     if req.session_id.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "session_id cannot be empty".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "session_id cannot be empty".to_string(),
+        ));
     }
-    
+
     // Mint a new CSRF token
     let token = csrf_protection.generate_token(&req.session_id).await;
-    
+
     // Log the token minting for security audit
-    log::info!("CSRF token minted for session: {} from client: {}", req.session_id, client_id);
-    
+    log::info!(
+        "CSRF token minted for session: {} from client: {}",
+        req.session_id,
+        client_id
+    );
+
     Ok(Json(CSRFTokenResponse {
         token,
         expires_in: 3600, // 1 hour
@@ -966,37 +1217,59 @@ async fn get_proposal_status(
         .or_else(|| headers.get("x-real-ip"))
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
-    
-    if !rate_limiter.check_rate_limit(client_id).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Rate limit check failed: {e}")))? {
-        return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
+
+    if !rate_limiter
+        .check_rate_limit(client_id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Rate limit check failed: {e}"),
+            )
+        })?
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded".to_string(),
+        ));
     }
-    
+
     // Validate proposal ID
     if proposal_id.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "proposal_id cannot be empty".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "proposal_id cannot be empty".to_string(),
+        ));
     }
-    
+
     // Get proposal status
     let proposal_info = {
         let runtime = runtime.read().map_err(|e| {
             error!("Runtime read lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "runtime lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "runtime lock poisoned".to_string(),
+            )
         })?;
-        
+
         let quorum_system = runtime.quorum_system.lock().map_err(|e| {
             error!("Quorum system lock poisoned: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, "quorum system lock poisoned".to_string())
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "quorum system lock poisoned".to_string(),
+            )
         })?;
-        
+
         if let Some(proposal) = quorum_system.get_proposal(&proposal_id) {
-            let signers: Vec<ProposalSigner> = proposal.signers.iter().map(|signer| {
-                ProposalSigner {
+            let signers: Vec<ProposalSigner> = proposal
+                .signers
+                .iter()
+                .map(|signer| ProposalSigner {
                     witness_id: signer.witness_id.clone(),
                     signed_at: signer.signed_at.to_rfc3339(),
-                }
-            }).collect();
-            
+                })
+                .collect();
+
             let status = if proposal.has_quorum() {
                 "committed".to_string()
             } else if proposal.is_expired() {
@@ -1004,7 +1277,7 @@ async fn get_proposal_status(
             } else {
                 "pending".to_string()
             };
-            
+
             Some(ProposalStatusResponse {
                 proposal_id: proposal.id.clone(),
                 entry: proposal.entry.clone(),
@@ -1022,12 +1295,15 @@ async fn get_proposal_status(
             None
         }
     };
-    
+
     match proposal_info {
         Some(response) => {
             info!("Retrieved proposal status for: {}", proposal_id);
             Ok(Json(response))
         }
-        None => Err((StatusCode::NOT_FOUND, format!("Proposal not found: {}", proposal_id))),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            format!("Proposal not found: {}", proposal_id),
+        )),
     }
 }

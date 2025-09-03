@@ -6,16 +6,16 @@ use crate::audit::AuditEvent;
 use crate::canon_store::CanonStore;
 
 use crate::errors::{SafeLock, SigilResult};
-use crate::runtime_config::{EnforcementMode, RuntimeConfig, TrustEvaluation};
 use crate::loa::LOA;
 use crate::log_sink::LogEvent;
+use crate::runtime_config::{EnforcementMode, RuntimeConfig, TrustEvaluation};
 use std::str::FromStr;
 
 // Import the logistic trust model registry and features.  This will allow
 // SigilRuntimeCore to evaluate audit events using a real trust model.
 // The TrustModelRegistry provides a default linear model with five features
 // and a logistic threshold.
-use crate::trust_linear::{TrustModelRegistry, TrustFeatures};
+use crate::trust_linear::{TrustFeatures, TrustModelRegistry};
 
 // Import the quorum system for witness signature validation
 use crate::quorum_system::QuorumSystem;
@@ -24,7 +24,7 @@ use crate::quorum_system::QuorumSystem;
 use crate::witness_registry::WitnessRegistry;
 
 // Import the module system for executing LOA-gated modules
-use crate::module_loader::{ModuleRegistry, HelloModule};
+use crate::module_loader::{HelloModule, ModuleRegistry};
 
 use log::{error, info};
 use std::sync::{Arc, Mutex};
@@ -35,7 +35,6 @@ pub struct SigilRuntimeCore {
 
     pub threshold: f64,
     pub canon_store: Arc<Mutex<dyn CanonStore>>,
-
 
     /// Registry of logistic trust models used to compute trust scores
     /// based on action, target, LOA, rate limiting and input entropy.
@@ -49,7 +48,6 @@ pub struct SigilRuntimeCore {
 
     /// Module registry for executing LOA-gated modules
     pub module_registry: std::sync::Mutex<ModuleRegistry>,
-
 }
 
 impl SigilRuntimeCore {
@@ -117,8 +115,7 @@ impl SigilRuntimeCore {
             recent_requests,
             &input_for_entropy,
         );
-        let (score_f64, allowed) =
-            self.trust_registry.evaluate_with_model(None, &features);
+        let (score_f64, allowed) = self.trust_registry.evaluate_with_model(None, &features);
         let score = score_f64 as f32;
 
         // Log trust score using the logistic model
@@ -157,8 +154,6 @@ impl SigilRuntimeCore {
         }
     }
 
-
-
     /// Refresh models from canon store
     pub fn refresh_models(&mut self) -> SigilResult<()> {
         // Get all model entries from canon using safe lock
@@ -181,7 +176,8 @@ impl SigilRuntimeCore {
         for rec in &model_entries {
             if rec.id == "trust_threshold" {
                 if let Ok(val) = serde_json::from_value::<serde_json::Value>(rec.payload.clone()) {
-                    if let Some(threshold_value) = val.as_object().and_then(|obj| obj.get("value")) {
+                    if let Some(threshold_value) = val.as_object().and_then(|obj| obj.get("value"))
+                    {
                         if let Some(th) = threshold_value.as_f64() {
                             self.threshold = th;
                         }
@@ -197,8 +193,6 @@ impl SigilRuntimeCore {
         );
         Ok(())
     }
-
-
 
     /// Get runtime status
     pub fn status(&self) -> serde_json::Value {
@@ -218,7 +212,7 @@ pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> Result<(),
         "strict" => EnforcementMode::Strict,
         _ => EnforcementMode::Active,
     };
-    
+
     let runtime_config = RuntimeConfig {
         threshold: config.irl.threshold,
         enforcement_mode,
@@ -231,19 +225,21 @@ pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> Result<(),
     let canon_store_path = "data/canon_store";
     let encryption_key = crate::keys::KeyManager::get_encryption_key()
         .map_err(|e| format!("Failed to get encryption key: {e}"))?;
-    let store = crate::canon_store_sled_encrypted::CanonStoreSled::new(canon_store_path, &encryption_key)
-        .map_err(|e| format!("Failed to create encrypted canon store: {e}"))?;
+    let store =
+        crate::canon_store_sled_encrypted::CanonStoreSled::new(canon_store_path, &encryption_key)
+            .map_err(|e| format!("Failed to create encrypted canon store: {e}"))?;
     let canon_store = Arc::new(Mutex::new(store));
 
     // Parse LOA from config string
-    let session_loa = LOA::from_str(&config.trust.default_loa).unwrap_or(LOA::Observer);
-    
+    let session_loa = LOA::from_str(&config.trust.default_loa)
+        .map_err(|e| format!("Invalid LOA format in config: {e}"))?;
+
     // Initialize runtime core with config-based parameters
     let mut runtime = SigilRuntimeCore::new(session_loa, canon_store, runtime_config)
         .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
 
     // For MVP: Use config-only threshold to avoid half-doing both config and canon
-    // TODO: Add model_refresh_from_canon flag to config later
+    // Note: model_refresh_from_canon flag will be added to config in future version
     runtime.threshold = config.irl.threshold;
     println!("Using config-only threshold: {:.2}", runtime.threshold);
 

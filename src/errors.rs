@@ -204,10 +204,7 @@ impl SigilError {
 
     /// Create an insufficient LOA error
     pub fn insufficient_loa(required: LOA, actual: LOA) -> Self {
-        Self::InsufficientLoa { 
-            required,
-            actual,
-        }
+        Self::InsufficientLoa { required, actual }
     }
 
     /// Create a not found error

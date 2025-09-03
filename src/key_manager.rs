@@ -1,11 +1,11 @@
 use crate::errors::SigilResult;
+use aes_gcm::{Aes256Gcm, KeyInit, aead::Aead};
 use base64::Engine;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use aes_gcm::{Aes256Gcm, KeyInit, aead::Aead};
-use rand::RngCore;
 
 /// Represents a cryptographic key pair for Sigil license signing
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,21 +40,25 @@ impl SecureKeyPair {
         let mut key_bytes = [0u8; 32];
         getrandom::fill(&mut key_bytes)
             .map_err(|e| crate::errors::SigilError::auth(format!("Failed to generate key: {e}")))?;
-        
+
         let signing_key = SigningKey::from_bytes(&key_bytes);
         let verifying_key = signing_key.verifying_key();
 
         let public_key = base64::engine::general_purpose::STANDARD.encode(verifying_key.to_bytes());
-        
+
         // Encrypt private key with master key
-        let cipher = Aes256Gcm::new_from_slice(master_key)
-            .map_err(|e| crate::errors::SigilError::encryption(format!("Invalid master key: {e}")))?;
-        
+        let cipher = Aes256Gcm::new_from_slice(master_key).map_err(|e| {
+            crate::errors::SigilError::encryption(format!("Invalid master key: {e}"))
+        })?;
+
         let mut nonce = [0u8; 12];
         rand::thread_rng().fill_bytes(&mut nonce);
-        let encrypted_private = cipher.encrypt(&nonce.into(), key_bytes.as_ref())
-            .map_err(|e| crate::errors::SigilError::encryption(format!("Failed to encrypt private key: {e}")))?;
-        
+        let encrypted_private = cipher
+            .encrypt(&nonce.into(), key_bytes.as_ref())
+            .map_err(|e| {
+                crate::errors::SigilError::encryption(format!("Failed to encrypt private key: {e}"))
+            })?;
+
         let mut encrypted_data = nonce.to_vec();
         encrypted_data.extend_from_slice(&encrypted_private);
 
@@ -69,23 +73,29 @@ impl SecureKeyPair {
 
     /// Sign data with the private key (requires master key for decryption)
     pub fn sign(&self, data: &[u8], master_key: &[u8; 32]) -> SigilResult<String> {
-        let cipher = Aes256Gcm::new_from_slice(master_key)
-            .map_err(|e| crate::errors::SigilError::encryption(format!("Invalid master key: {e}")))?;
-        
+        let cipher = Aes256Gcm::new_from_slice(master_key).map_err(|e| {
+            crate::errors::SigilError::encryption(format!("Invalid master key: {e}"))
+        })?;
+
         if self.encrypted_private_key.len() < 12 {
-            return Err(crate::errors::SigilError::encryption("Invalid encrypted private key format".to_string()));
+            return Err(crate::errors::SigilError::encryption(
+                "Invalid encrypted private key format".to_string(),
+            ));
         }
-        
+
         let nonce = &self.encrypted_private_key[..12];
         let encrypted_key = &self.encrypted_private_key[12..];
-        
-        let private_key_bytes = cipher.decrypt(nonce.into(), encrypted_key)
-            .map_err(|e| crate::errors::SigilError::encryption(format!("Failed to decrypt private key: {e}")))?;
-        
+
+        let private_key_bytes = cipher.decrypt(nonce.into(), encrypted_key).map_err(|e| {
+            crate::errors::SigilError::encryption(format!("Failed to decrypt private key: {e}"))
+        })?;
+
         if private_key_bytes.len() != 32 {
-            return Err(crate::errors::SigilError::encryption("Invalid private key length".to_string()));
+            return Err(crate::errors::SigilError::encryption(
+                "Invalid private key length".to_string(),
+            ));
         }
-        
+
         let mut key_array = [0u8; 32];
         key_array.copy_from_slice(&private_key_bytes);
 
@@ -130,7 +140,10 @@ impl SecureKeyPair {
     /// Save the secure key pair to a file
     pub fn save_to_file(&self, path: &str) -> SigilResult<()> {
         let json = serde_json::to_string_pretty(self).map_err(|e| {
-            crate::errors::SigilError::serialization("Failed to serialize secure key pair".to_string(), e)
+            crate::errors::SigilError::serialization(
+                "Failed to serialize secure key pair".to_string(),
+                e,
+            )
         })?;
 
         fs::write(path, json).map_err(|e| {
@@ -156,27 +169,27 @@ impl SecureKeyPair {
 
 /// Derive master key from password using Argon2
 pub fn derive_master_key(password: &str, salt: &[u8]) -> Result<[u8; 32], String> {
-    use argon2::{Argon2, PasswordHasher};
     use argon2::password_hash::SaltString;
-    
+    use argon2::{Argon2, PasswordHasher};
+
     let argon2 = Argon2::default();
-    let salt_string = SaltString::encode_b64(salt)
-        .map_err(|e| format!("Failed to encode salt: {e}"))?;
-    
-    let password_hash = argon2.hash_password(password.as_bytes(), &salt_string)
+    let salt_string =
+        SaltString::encode_b64(salt).map_err(|e| format!("Failed to encode salt: {e}"))?;
+
+    let password_hash = argon2
+        .hash_password(password.as_bytes(), &salt_string)
         .map_err(|e| format!("Failed to hash password: {e}"))?;
-    
-    let hash = password_hash.hash
-        .ok_or("Password hash is empty")?;
+
+    let hash = password_hash.hash.ok_or("Password hash is empty")?;
     let hash_bytes = hash.as_bytes();
-    
+
     if hash_bytes.len() < 32 {
         return Err("Generated hash is too short".to_string());
     }
-    
+
     let mut master_key = [0u8; 32];
     master_key.copy_from_slice(&hash_bytes[..32]);
-    
+
     Ok(master_key)
 }
 
@@ -313,10 +326,15 @@ impl KeyManager {
     }
 
     /// Generate and store a new secure key pair
-    pub fn generate_secure_key(&mut self, key_id: &str, key_type: KeyType) -> SigilResult<&SecureKeyPair> {
-        let master_key = self.master_key
+    pub fn generate_secure_key(
+        &mut self,
+        key_id: &str,
+        key_type: KeyType,
+    ) -> SigilResult<&SecureKeyPair> {
+        let master_key = self
+            .master_key
             .ok_or_else(|| crate::errors::SigilError::auth("Master key not set".to_string()))?;
-        
+
         let key_pair = SecureKeyPair::generate(key_id, key_type, &master_key)?;
         self.secure_keys.insert(key_id.to_string(), key_pair);
         Ok(self.secure_keys.get(key_id).unwrap())
@@ -343,11 +361,12 @@ impl KeyManager {
     pub fn sign_with_key(&self, key_id: &str, data: &[u8]) -> SigilResult<String> {
         // Try secure key first
         if let Some(secure_key) = self.secure_keys.get(key_id) {
-            let master_key = self.master_key
+            let master_key = self
+                .master_key
                 .ok_or_else(|| crate::errors::SigilError::auth("Master key not set".to_string()))?;
             return secure_key.sign(data, &master_key);
         }
-        
+
         // Fall back to legacy key
         let key_pair = self
             .keys
@@ -363,7 +382,7 @@ impl KeyManager {
         if let Some(secure_key) = self.secure_keys.get(key_id) {
             return secure_key.verify(data, signature);
         }
-        
+
         // Fall back to legacy key
         let key_pair = self
             .keys
@@ -456,7 +475,9 @@ mod tests {
     #[test]
     fn test_secure_key_generation() {
         let master_key = [1u8; 32];
-        let key_pair = SecureKeyPair::generate("test_secure_key", KeyType::LicenseSigning, &master_key).unwrap();
+        let key_pair =
+            SecureKeyPair::generate("test_secure_key", KeyType::LicenseSigning, &master_key)
+                .unwrap();
         assert_eq!(key_pair.key_id, "test_secure_key");
         assert!(!key_pair.public_key.is_empty());
         assert!(!key_pair.encrypted_private_key.is_empty());
@@ -465,7 +486,9 @@ mod tests {
     #[test]
     fn test_secure_sign_and_verify() {
         let master_key = [1u8; 32];
-        let key_pair = SecureKeyPair::generate("test_secure_key", KeyType::LicenseSigning, &master_key).unwrap();
+        let key_pair =
+            SecureKeyPair::generate("test_secure_key", KeyType::LicenseSigning, &master_key)
+                .unwrap();
         let data = b"Hello, Secure Sigil!";
 
         let signature = key_pair.sign(data, &master_key).unwrap();
@@ -478,14 +501,14 @@ mod tests {
     fn test_master_key_derivation() {
         let password = "test_password";
         let salt = [1u8; 32];
-        
+
         let master_key = derive_master_key(password, &salt).unwrap();
         assert_eq!(master_key.len(), 32);
-        
+
         // Same password and salt should produce same key
         let master_key2 = derive_master_key(password, &salt).unwrap();
         assert_eq!(master_key, master_key2);
-        
+
         // Different password should produce different key
         let master_key3 = derive_master_key("different_password", &salt).unwrap();
         assert_ne!(master_key, master_key3);
@@ -531,7 +554,7 @@ mod tests {
         let mut manager = KeyManager::new();
         let master_key = [1u8; 32];
         manager.set_master_key(master_key);
-        
+
         let _secure_key = manager
             .generate_secure_key("test_secure_key", KeyType::LicenseSigning)
             .unwrap();

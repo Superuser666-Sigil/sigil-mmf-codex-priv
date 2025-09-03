@@ -13,7 +13,7 @@ pub struct TrustWeights {
 impl Default for TrustWeights {
     fn default() -> Self {
         Self {
-            bias: -0.8, // Balanced restrictive bias for security
+            bias: -0.8,                                 // Balanced restrictive bias for security
             weights: vec![0.15, 0.15, 0.4, 0.15, 0.15], // LOA gets double weight for privilege enforcement
             threshold: 0.4, // Security threshold - Allow Operator+ for modules, deny Guest risky actions
         }
@@ -31,7 +31,13 @@ pub struct TrustFeatures {
 }
 
 impl TrustFeatures {
-    pub fn new(action: &str, target: Option<&str>, loa: &LOA, recent_requests: usize, input: &str) -> Self {
+    pub fn new(
+        action: &str,
+        target: Option<&str>,
+        loa: &LOA,
+        recent_requests: usize,
+        input: &str,
+    ) -> Self {
         // Action class risk scoring
         let action_class = match action.to_lowercase().as_str() {
             "read" | "get" | "query" | "canon_read" | "audit_read" | "config_read" => 0.1,
@@ -39,7 +45,7 @@ impl TrustFeatures {
             "delete" | "remove" => 0.9,
             "execute" | "run" | "module_execute" => 0.4, // Module execution is lower risk for authenticated users
             "admin" | "system" => 0.95,
-            "trust_check" => 0.1, // Trust checks are low risk queries
+            "trust_check" => 0.1,       // Trust checks are low risk queries
             "elevation_request" => 0.8, // LOA elevation is high risk
             _ => 0.5,
         };
@@ -71,7 +77,10 @@ impl TrustFeatures {
 
         // Input entropy scoring (simple complexity measure)
         let input_entropy = {
-            let unique_chars = input.chars().collect::<std::collections::HashSet<_>>().len();
+            let unique_chars = input
+                .chars()
+                .collect::<std::collections::HashSet<_>>()
+                .len();
             let length = input.len();
             if length == 0 {
                 0.0
@@ -117,22 +126,23 @@ impl TrustLinearModel {
     /// Evaluate trust using logistic regression
     pub fn evaluate(&self, features: &TrustFeatures) -> (f64, bool) {
         let feature_vec = features.to_vector();
-        
+
         // Ensure we have the right number of features
         if feature_vec.len() != self.weights.weights.len() {
             return (0.0, false); // Default deny on mismatch
         }
 
         // Linear combination: bias + sum(weight_i * feature_i)
-        let linear_score = self.weights.bias + 
-            feature_vec.iter()
+        let linear_score = self.weights.bias
+            + feature_vec
+                .iter()
                 .zip(self.weights.weights.iter())
                 .map(|(f, w)| f * w)
                 .sum::<f64>();
 
         // Apply logistic function to get probability
         let score = 1.0 / (1.0 + (-linear_score).exp());
-        
+
         // Determine if allowed based on threshold
         let allowed = score >= self.weights.threshold;
 

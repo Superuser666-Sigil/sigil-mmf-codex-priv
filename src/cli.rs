@@ -1,6 +1,6 @@
+use crate::secure_file_ops::SecureFileOperations;
 use clap::{Parser, Subcommand};
 use std::sync::{Arc, RwLock};
-use crate::secure_file_ops::SecureFileOperations;
 
 /// Helper function to find a key file in secure locations
 fn find_key_file(key_id: &str) -> Option<String> {
@@ -38,8 +38,6 @@ pub enum Commands {
         #[arg(short, long)]
         file: String,
     },
-
-
 
     /// Diff a Canon node by ID
     Diff {
@@ -158,7 +156,10 @@ pub fn dispatch(cli: Cli) {
                         return;
                     }
                 };
-                let store = match crate::canon_store_sled_encrypted::CanonStoreSled::new("data/canon_store", &encryption_key) {
+                let store = match crate::canon_store_sled_encrypted::CanonStoreSled::new(
+                    "data/canon_store",
+                    &encryption_key,
+                ) {
                     Ok(s) => Arc::new(Mutex::new(s)),
                     Err(e) => {
                         eprintln!("Failed to open encrypted canon store: {e}");
@@ -200,25 +201,35 @@ pub fn dispatch(cli: Cli) {
 
                     // Validate signature and public key consistency
                     if record.sig.is_some() != record.pub_key.is_some() {
-                        validation_errors.push("Signature and public key must both be present or both be None");
+                        validation_errors
+                            .push("Signature and public key must both be present or both be None");
                     }
 
                     if validation_errors.is_empty() {
                         println!("Record [{}] ({}) valid.", i, record.id);
                     } else {
-                        eprintln!("Record [{}] ({}) failed: {}", i, record.id, validation_errors.join(", "));
+                        eprintln!(
+                            "Record [{}] ({}) failed: {}",
+                            i,
+                            record.id,
+                            validation_errors.join(", ")
+                        );
                     }
                 }
             } else {
-                eprintln!("File-based canon validation is deprecated. Use 'canon_store' or 'store' to validate records from the Canon store.");
-                eprintln!("Legacy format validation has been retired in favor of CanonStore-based operations.");
+                eprintln!(
+                    "File-based canon validation is deprecated. Use 'canon_store' or 'store' to validate records from the Canon store."
+                );
+                eprintln!(
+                    "Legacy format validation has been retired in favor of CanonStore-based operations."
+                );
             }
         }
 
         Commands::Diff { id } => {
             // Initialize canon store for diff operation
-            use crate::canon_store_sled::CanonStoreSled;
             use crate::canon_diff_chain::diff_by_id_with_store;
+            use crate::canon_store_sled::CanonStoreSled;
             use crate::license_validator::load_current_loa;
             use std::sync::{Arc, Mutex};
 
@@ -248,14 +259,14 @@ pub fn dispatch(cli: Cli) {
                             println!("  {}: {}", key, value);
                         }
                     }
-                },
+                }
                 Err(e) => eprintln!("Diff failed: {e}"),
             }
-        },
+        }
         Commands::Revert { id, to_hash } => {
             // Initialize canon store for revert operation
-            use crate::canon_store_sled::CanonStoreSled;
             use crate::canon_store::revert_node_with_store;
+            use crate::canon_store_sled::CanonStoreSled;
             use crate::license_validator::load_current_loa;
             use std::sync::{Arc, Mutex};
 
@@ -276,10 +287,13 @@ pub fn dispatch(cli: Cli) {
             };
 
             match revert_node_with_store(store, &id, &to_hash, &loa) {
-                Ok(_) => println!("✅ Successfully reverted record '{}' to hash '{}'", id, to_hash),
+                Ok(_) => println!(
+                    "✅ Successfully reverted record '{}' to hash '{}'",
+                    id, to_hash
+                ),
                 Err(e) => eprintln!("Revert failed: {e}"),
             }
-        },
+        }
         Commands::Whoami => match crate::license_validator::load_current_loa() {
             Ok(loa) => println!("You are operating as {loa:?}"),
             Err(e) => eprintln!("LOA detection failed: {e}"),
@@ -295,10 +309,9 @@ pub fn dispatch(cli: Cli) {
 
             let build_runtime =
                 || -> Result<Arc<RwLock<crate::sigil_runtime_core::SigilRuntimeCore>>, String> {
-
                     use crate::config_loader::load_config;
-                    use crate::runtime_config::{EnforcementMode, RuntimeConfig};
                     use crate::loa::LOA;
+                    use crate::runtime_config::{EnforcementMode, RuntimeConfig};
                     use crate::sigil_runtime_core::SigilRuntimeCore;
                     use std::sync::Mutex;
 
@@ -325,13 +338,15 @@ pub fn dispatch(cli: Cli) {
                     // Use encrypted Sled backend with proper key management
                     let encryption_key = crate::keys::KeyManager::get_encryption_key()
                         .map_err(|e| format!("Failed to get encryption key: {e}"))?;
-                    let store = crate::canon_store_sled_encrypted::CanonStoreSled::new("data/canon_store", &encryption_key)
-                        .map_err(|e| format!("Failed to create encrypted canon store: {e}"))?;
+                    let store = crate::canon_store_sled_encrypted::CanonStoreSled::new(
+                        "data/canon_store",
+                        &encryption_key,
+                    )
+                    .map_err(|e| format!("Failed to create encrypted canon store: {e}"))?;
                     let canon_store = Arc::new(Mutex::new(store));
 
-                    let runtime =
-                        SigilRuntimeCore::new(LOA::Observer, canon_store, runtime_cfg)
-                            .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
+                    let runtime = SigilRuntimeCore::new(LOA::Observer, canon_store, runtime_cfg)
+                        .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
 
                     // IRL telemetry/explainer removed
                     // Telemetry and explanation enabling is now handled by the runtime constructor.
@@ -458,22 +473,33 @@ pub fn dispatch(cli: Cli) {
                         if let Some(output_path) = output {
                             // Use secure file operations
                             let secure_file_ops = SecureFileOperations::new(
-                                vec![std::env::current_dir().unwrap().to_string_lossy().to_string()],
-                                1024 * 1024 // 1MB max
+                                vec![
+                                    std::env::current_dir()
+                                        .unwrap()
+                                        .to_string_lossy()
+                                        .to_string(),
+                                ],
+                                1024 * 1024, // 1MB max
                             );
-                            
+
                             match secure_file_ops {
                                 Ok(ops) => {
                                     match ops.write_file_secure(
                                         std::path::Path::new(&output_path),
-                                        signature.as_bytes()
+                                        signature.as_bytes(),
                                     ) {
-                                        Ok(_) => println!("💾 Signature saved securely to: {output_path}"),
-                                        Err(e) => eprintln!("❌ Failed to save signature securely: {e}"),
+                                        Ok(_) => println!(
+                                            "💾 Signature saved securely to: {output_path}"
+                                        ),
+                                        Err(e) => {
+                                            eprintln!("❌ Failed to save signature securely: {e}")
+                                        }
                                     }
                                 }
                                 Err(e) => {
-                                    eprintln!("❌ Failed to initialize secure file operations: {e}");
+                                    eprintln!(
+                                        "❌ Failed to initialize secure file operations: {e}"
+                                    );
                                     // Fall back to regular file write
                                     match std::fs::write(&output_path, signature) {
                                         Ok(_) => println!("💾 Signature saved to: {output_path}"),
@@ -548,10 +574,10 @@ fn generate_license_command(
 ) {
     use crate::loa::LOA;
     use chrono::{Duration, Utc};
+    use sha2::{Digest, Sha256};
     use std::fs;
-    use sha2::{Sha256, Digest};
     use uuid::Uuid;
-    
+
     // Parse LOA
     let loa = match loa_str.to_lowercase().as_str() {
         "guest" => LOA::Guest,
@@ -560,37 +586,45 @@ fn generate_license_command(
         "mentor" => LOA::Mentor,
         "root" => LOA::Root,
         _ => {
-            eprintln!("❌ Invalid LOA: {loa_str}. Must be Guest, Observer, Operator, Mentor, or Root");
+            eprintln!(
+                "❌ Invalid LOA: {loa_str}. Must be Guest, Observer, Operator, Mentor, or Root"
+            );
             return;
         }
     };
-    
-    // Load signing key from disk using platform-appropriate paths  
+
+    // Load signing key from disk using platform-appropriate paths
     use crate::key_manager::SigilKeyPair;
-    let home_dir = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME"))
-                    .unwrap_or_else(|_| ".".to_string());
+    let home_dir = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_else(|_| ".".to_string());
     let key_path = format!("{}/.sigil/keys/{}.json", home_dir, signing_key_id);
-    
+
     let signing_key = match SigilKeyPair::load_from_file(&key_path) {
         Ok(key) => key,
         Err(_) => {
-            eprintln!("❌ Signing key '{signing_key_id}' not found at: {}", key_path);
+            eprintln!(
+                "❌ Signing key '{signing_key_id}' not found at: {}",
+                key_path
+            );
             eprintln!("Generate one first with:");
-            eprintln!("   cargo run --bin mmf_sigil generate-key --key-id {signing_key_id} --key-type license");
+            eprintln!(
+                "   cargo run --bin mmf_sigil generate-key --key-id {signing_key_id} --key-type license"
+            );
             return;
         }
     };
-    
+
     let now = Utc::now();
     let expires_at = now + Duration::days(expires_days as i64);
     let license_id = format!("sigil-license-{}", Uuid::new_v4().simple());
-    
+
     // Generate owner hash_id from email (deterministic but privacy-preserving)
     let mut hasher = Sha256::new();
     hasher.update(owner_email.as_bytes());
     hasher.update(b"sigil-license-salt"); // Add salt to prevent rainbow tables
     let hash_id = format!("{:x}", hasher.finalize())[..16].to_string();
-    
+
     // Create license structure matching sigil_license.toml format
     let license_toml = format!(
         r#"# Sigil Protocol License File
@@ -648,10 +682,10 @@ canonicalized = true
         can_register_module = matches!(loa, LOA::Root | LOA::Mentor | LOA::Operator),
         can_elevate_identity = matches!(loa, LOA::Root | LOA::Mentor),
     );
-    
-    // TODO: Actually sign the license content with the signing key
-    // For now, we generate a valid structure that can be manually signed
-    
+
+    // Note: License signature is placeholder. Manual signing required.
+    // Implementation planned for future version with proper Ed25519 signing
+
     match fs::write(output, license_toml) {
         Ok(()) => {
             println!("✅ License generated: {output}");

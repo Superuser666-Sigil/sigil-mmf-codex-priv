@@ -12,8 +12,6 @@ impl EnforcementMode {
     }
 }
 
-
-
 #[derive(Debug, Clone)]
 pub struct TrustEvaluation {
     pub score: f32,
@@ -48,5 +46,3 @@ impl Default for RuntimeConfig {
         }
     }
 }
-
-

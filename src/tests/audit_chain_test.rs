@@ -13,12 +13,15 @@ fn test_reasoning_chain_to_frozen_chain_workflow() {
     chain.add_suggestion("The answer is 5");
     chain.set_verdict(Verdict::Deny);
     chain.set_trust_score(0.98, false);
-    
+
     // Finalize the reasoning
     assert!(chain.finalize_reasoning().is_ok());
 
     // Phase 2: Freeze into immutable FrozenChain
-    let store = AuditStore::new("test_logs/reasoning_chains.jsonl", "test_logs/frozen_chains.jsonl");
+    let store = AuditStore::new(
+        "test_logs/reasoning_chains.jsonl",
+        "test_logs/frozen_chains.jsonl",
+    );
     let frozen_chain = store.freeze_and_store_chain(chain).unwrap();
 
     // Verify the frozen chain
@@ -40,14 +43,20 @@ fn test_frozen_chain_integrity() {
     chain.finalize_reasoning().unwrap();
 
     // Freeze it
-    let store = AuditStore::new("test_logs/reasoning_chains.jsonl", "test_logs/frozen_chains.jsonl");
+    let store = AuditStore::new(
+        "test_logs/reasoning_chains.jsonl",
+        "test_logs/frozen_chains.jsonl",
+    );
     let frozen_chain = store.freeze_and_store_chain(chain).unwrap();
 
     // Verify integrity
     assert!(frozen_chain.verify_integrity().unwrap());
 
     // Retrieve and verify again
-    let retrieved = store.get_frozen_chain(&frozen_chain.chain_id).unwrap().unwrap();
+    let retrieved = store
+        .get_frozen_chain(&frozen_chain.chain_id)
+        .unwrap()
+        .unwrap();
     assert!(retrieved.verify_integrity().unwrap());
     assert_eq!(retrieved.chain_id, frozen_chain.chain_id);
 }
@@ -63,7 +72,10 @@ fn test_chain_lineage() {
     chain1.set_trust_score(0.8, false);
     chain1.finalize_reasoning().unwrap();
 
-    let store = AuditStore::new("test_logs/reasoning_chains.jsonl", "test_logs/frozen_chains.jsonl");
+    let store = AuditStore::new(
+        "test_logs/reasoning_chains.jsonl",
+        "test_logs/frozen_chains.jsonl",
+    );
     let frozen1 = store.freeze_and_store_chain(chain1).unwrap();
 
     // Create second chain that links to first
@@ -76,7 +88,7 @@ fn test_chain_lineage() {
     chain2.finalize_reasoning().unwrap();
 
     let mut frozen2 = store.freeze_and_store_chain(chain2).unwrap();
-    
+
     // Link to parent and re-store the updated chain
     frozen2.link_to_parent(&frozen1).unwrap();
     store.write_frozen_chain(&frozen2).unwrap();
@@ -101,7 +113,10 @@ fn test_incomplete_reasoning_chain_cannot_be_frozen() {
     assert!(chain.finalize_reasoning().is_err());
 
     // Should not be able to freeze
-    let store = AuditStore::new("test_logs/reasoning_chains.jsonl", "test_logs/frozen_chains.jsonl");
+    let store = AuditStore::new(
+        "test_logs/reasoning_chains.jsonl",
+        "test_logs/frozen_chains.jsonl",
+    );
     assert!(store.freeze_and_store_chain(chain).is_err());
 }
 
@@ -117,29 +132,48 @@ fn test_frozen_chain_ed25519_signature_verification() {
     chain.finalize_reasoning().unwrap();
 
     // Freeze it (this should sign with Ed25519)
-    let store = AuditStore::new("test_logs/reasoning_chains.jsonl", "test_logs/frozen_chains.jsonl");
+    let store = AuditStore::new(
+        "test_logs/reasoning_chains.jsonl",
+        "test_logs/frozen_chains.jsonl",
+    );
     let frozen_chain = store.freeze_and_store_chain(chain).unwrap();
 
     // Verify that signature and public key are present
-    assert!(frozen_chain.signature.is_some(), "FrozenChain should have Ed25519 signature");
-    assert!(frozen_chain.public_key.is_some(), "FrozenChain should have Ed25519 public key");
+    assert!(
+        frozen_chain.signature.is_some(),
+        "FrozenChain should have Ed25519 signature"
+    );
+    assert!(
+        frozen_chain.public_key.is_some(),
+        "FrozenChain should have Ed25519 public key"
+    );
 
     // Verify integrity (this includes Ed25519 signature verification)
-    assert!(frozen_chain.verify_integrity().unwrap(), "FrozenChain should verify with Ed25519 signature");
+    assert!(
+        frozen_chain.verify_integrity().unwrap(),
+        "FrozenChain should verify with Ed25519 signature"
+    );
 
     // Test tampering detection - modify the stored content hash to simulate corruption
     let mut tampered_chain = frozen_chain.clone();
-    tampered_chain.content_hash = "1234567890123456789012345678901234567890123456789012345678901234".to_string();
-    
+    tampered_chain.content_hash =
+        "1234567890123456789012345678901234567890123456789012345678901234".to_string();
+
     // Tampering should cause verification to fail
     let verification_result = tampered_chain.verify_integrity().unwrap();
-    assert!(!verification_result, "Tampered FrozenChain should fail Ed25519 verification");
+    assert!(
+        !verification_result,
+        "Tampered FrozenChain should fail Ed25519 verification"
+    );
 
     // Test tampering detection - modify the signature
     let mut tampered_sig = frozen_chain.clone();
     tampered_sig.signature = Some("YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh".to_string());
-    
+
     // Invalid signature should cause verification to fail
     let verification_result = tampered_sig.verify_integrity();
-    assert!(verification_result.is_ok() && !verification_result.unwrap(), "FrozenChain with invalid signature should fail verification");
+    assert!(
+        verification_result.is_ok() && !verification_result.unwrap(),
+        "FrozenChain with invalid signature should fail verification"
+    );
 }

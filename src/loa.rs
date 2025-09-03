@@ -68,24 +68,36 @@ impl LOA {
     pub fn can_perform_action(&self, action: &str, _resource: &str) -> bool {
         match self {
             LOA::Root => true,
-            LOA::Mentor => matches!(action, "read" | "write" | "audit" | "validate" | "train" | "export"),
+            LOA::Mentor => matches!(
+                action,
+                "read" | "write" | "audit" | "validate" | "train" | "export"
+            ),
             LOA::Operator => matches!(action, "read" | "write" | "audit" | "validate"),
             LOA::Observer => matches!(action, "read" | "audit" | "validate"),
             LOA::Guest => matches!(action, "read"),
         }
     }
-    
+
     /// Check if this LOA level can access a specific resource
     pub fn can_access_resource(&self, resource: &str) -> bool {
         match self {
             LOA::Root => true,
             LOA::Mentor => !resource.contains("system") && !resource.contains("elevation"),
-            LOA::Operator => !resource.contains("system") && !resource.contains("admin") && !resource.contains("elevation"),
-            LOA::Observer => !resource.contains("system") && !resource.contains("admin") && !resource.contains("write") && !resource.contains("elevation"),
+            LOA::Operator => {
+                !resource.contains("system")
+                    && !resource.contains("admin")
+                    && !resource.contains("elevation")
+            }
+            LOA::Observer => {
+                !resource.contains("system")
+                    && !resource.contains("admin")
+                    && !resource.contains("write")
+                    && !resource.contains("elevation")
+            }
             LOA::Guest => resource.contains("public") || resource.contains("readonly"),
         }
     }
-    
+
     /// Get the minimum LOA required for an action
     pub fn required_for_action(action: &str) -> Option<LOA> {
         match action {
@@ -100,15 +112,22 @@ impl LOA {
             _ => None,
         }
     }
-    
+
     /// Check if this LOA can elevate to target LOA
     pub fn can_elevate_to(&self, target: &LOA) -> bool {
         matches!(
             (self, target),
-            (LOA::Root, _) | (LOA::Mentor, LOA::Root) | (LOA::Operator, LOA::Mentor | LOA::Root) | (LOA::Observer, LOA::Operator | LOA::Mentor | LOA::Root) | (LOA::Guest, LOA::Observer | LOA::Operator | LOA::Mentor | LOA::Root)
+            (LOA::Root, _)
+                | (LOA::Mentor, LOA::Root)
+                | (LOA::Operator, LOA::Mentor | LOA::Root)
+                | (LOA::Observer, LOA::Operator | LOA::Mentor | LOA::Root)
+                | (
+                    LOA::Guest,
+                    LOA::Observer | LOA::Operator | LOA::Mentor | LOA::Root
+                )
         )
     }
-    
+
     /// Get the next LOA level in the hierarchy
     pub fn next_level(&self) -> Option<LOA> {
         match self {
@@ -119,7 +138,7 @@ impl LOA {
             LOA::Root => None,
         }
     }
-    
+
     /// Get the previous LOA level in the hierarchy
     pub fn previous_level(&self) -> Option<LOA> {
         match self {

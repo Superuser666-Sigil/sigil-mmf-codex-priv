@@ -19,12 +19,12 @@ impl Default for RuntimeTrustConfig {
     }
 }
 
+use crate::config_security::SecureConfig;
 use figment::{
-    providers::{Env, Format, Serialized, Toml},
     Figment,
+    providers::{Env, Format, Serialized, Toml},
 };
 use serde::Deserialize;
-use crate::config_security::SecureConfig;
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct MMFConfig {
@@ -72,11 +72,11 @@ pub fn load_config() -> Result<MMFConfig, Box<figment::Error>> {
     // Validate environment variables first
     if let Err(errors) = SecureConfig::validate_environment() {
         return Err(Box::new(figment::Error::from(format!(
-            "Environment validation failed: {}", 
+            "Environment validation failed: {}",
             errors.join(", ")
         ))));
     }
-    
+
     let figment = Figment::from(Serialized::defaults(MMFConfigDefaults {
         db_backend: "sled".into(),
         irl: RuntimeTrustConfig::default(),
@@ -97,14 +97,17 @@ pub fn load_config() -> Result<MMFConfig, Box<figment::Error>> {
 /// Load configuration with enhanced security
 pub fn load_secure_config(master_key: &str) -> Result<MMFConfig, Box<figment::Error>> {
     // Create secure config instance
-    let secure_config = SecureConfig::new(master_key)
-        .map_err(|e| Box::new(figment::Error::from(format!("Secure config initialization failed: {e}"))))?;
-    
+    let secure_config = SecureConfig::new(master_key).map_err(|e| {
+        Box::new(figment::Error::from(format!(
+            "Secure config initialization failed: {e}"
+        )))
+    })?;
+
     // Try to load encrypted config first
     if let Ok(config) = secure_config.load_encrypted::<MMFConfig>("mmf.encrypted.toml") {
         return Ok(config);
     }
-    
+
     // Fall back to regular config loading
     load_config()
 }

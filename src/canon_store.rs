@@ -1,6 +1,6 @@
-use crate::loa::LOA;
 use crate::canonical_record::CanonicalRecord;
-use crate::errors::{SigilResult, SigilError};
+use crate::errors::{SigilError, SigilResult};
+use crate::loa::LOA;
 use std::sync::{Arc, Mutex};
 
 pub trait CanonStore: Send + Sync {
@@ -28,21 +28,26 @@ pub trait CanonStore: Send + Sync {
 /// Revert a Canon record to a previous version using CanonStore
 /// This searches through the record's lineage chain to find the target hash
 pub fn revert_node_with_store(
-    canon_store: Arc<Mutex<dyn CanonStore>>, 
-    id: &str, 
-    to_hash: &str, 
-    requester_loa: &LOA
+    canon_store: Arc<Mutex<dyn CanonStore>>,
+    id: &str,
+    to_hash: &str,
+    requester_loa: &LOA,
 ) -> SigilResult<()> {
-    let mut store = canon_store.lock()
+    let mut store = canon_store
+        .lock()
         .map_err(|_| SigilError::internal("Failed to acquire canon store lock"))?;
 
     // Only Root can revert records
     if !matches!(requester_loa, LOA::Root) {
-        return Err(SigilError::insufficient_loa(LOA::Root, requester_loa.clone()));
+        return Err(SigilError::insufficient_loa(
+            LOA::Root,
+            requester_loa.clone(),
+        ));
     }
 
     // Load the current record
-    let current_record = store.load_record(id, requester_loa)
+    let current_record = store
+        .load_record(id, requester_loa)
         .ok_or_else(|| SigilError::not_found("record", id))?;
 
     // Search through the lineage chain to find the target hash
@@ -61,8 +66,7 @@ pub fn revert_node_with_store(
         }
     }
 
-    let target = target_record
-        .ok_or_else(|| SigilError::not_found("record with hash", to_hash))?;
+    let target = target_record.ok_or_else(|| SigilError::not_found("record with hash", to_hash))?;
 
     // Create a new record based on the target but with updated metadata
     let reverted_record = CanonicalRecord {
@@ -75,14 +79,15 @@ pub fn revert_node_with_store(
         payload: target.payload,
         links: target.links,
         prev: Some(current_record.id.clone()), // Link to the current record as previous
-        hash: String::new(), // Will be computed during canonicalization
-        sig: None,     // Will be signed during persistence
-        pub_key: None,    // Will be set during persistence
+        hash: String::new(),                   // Will be computed during canonicalization
+        sig: None,                             // Will be signed during persistence
+        pub_key: None,                         // Will be set during persistence
         witnesses: Vec::new(),
     };
 
     // Add the reverted record to the store
-    store.add_record(reverted_record, requester_loa, false)
+    store
+        .add_record(reverted_record, requester_loa, false)
         .map_err(|e| SigilError::canon("revert", e))?;
 
     Ok(())

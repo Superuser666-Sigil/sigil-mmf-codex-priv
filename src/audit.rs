@@ -1,7 +1,7 @@
 use crate::errors::{SafeLock, SigilError, SigilResult};
 use crate::loa::LOA;
 use crate::log_sink::LogEvent;
-use crate::secure_audit_chain::{SecureAuditChain, ImmutableAuditStore};
+use crate::secure_audit_chain::{ImmutableAuditStore, SecureAuditChain};
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
@@ -205,7 +205,10 @@ pub fn get_api_event_stats() -> HashMap<String, u32> {
 }
 
 /// Initialize secure audit store with cryptographic integrity
-pub fn init_secure_audit_store(storage_path: String, signing_key: ed25519_dalek::SigningKey) -> SigilResult<()> {
+pub fn init_secure_audit_store(
+    storage_path: String,
+    signing_key: ed25519_dalek::SigningKey,
+) -> SigilResult<()> {
     match SECURE_AUDIT_STORE.safe_lock() {
         Ok(mut store) => {
             let audit_store = ImmutableAuditStore::new(storage_path, signing_key);
@@ -221,7 +224,10 @@ pub fn init_secure_audit_store(storage_path: String, signing_key: ed25519_dalek:
 }
 
 /// Write audit event to secure audit chain
-pub fn write_secure_audit_event(event: &AuditEvent, signing_key: &ed25519_dalek::SigningKey) -> SigilResult<()> {
+pub fn write_secure_audit_event(
+    event: &AuditEvent,
+    signing_key: &ed25519_dalek::SigningKey,
+) -> SigilResult<()> {
     // Convert AuditEvent to AuditData for secure chain
     let audit_data = crate::secure_audit_chain::AuditData {
         user_id: event.who.clone(),
@@ -237,7 +243,7 @@ pub fn write_secure_audit_event(event: &AuditEvent, signing_key: &ed25519_dalek:
             meta
         },
     };
-    
+
     match SECURE_AUDIT_STORE.safe_lock() {
         Ok(store) => {
             if let Some(ref audit_store) = *store {
@@ -245,13 +251,17 @@ pub fn write_secure_audit_event(event: &AuditEvent, signing_key: &ed25519_dalek:
                 let chain = SecureAuditChain::create_chain(
                     audit_data,
                     &[], // No parent chains for individual events
-                    signing_key
-                ).map_err(|e| SigilError::audit(format!("Failed to create secure audit chain: {e}")))?;
-                
+                    signing_key,
+                )
+                .map_err(|e| {
+                    SigilError::audit(format!("Failed to create secure audit chain: {e}"))
+                })?;
+
                 // Store in immutable audit log
-                audit_store.write_chain(&chain)
-                    .map_err(|e| SigilError::audit(format!("Failed to store secure audit chain: {e}")))?;
-                
+                audit_store.write_chain(&chain).map_err(|e| {
+                    SigilError::audit(format!("Failed to store secure audit chain: {e}"))
+                })?;
+
                 info!("Audit event written to secure audit chain");
                 Ok(())
             } else {

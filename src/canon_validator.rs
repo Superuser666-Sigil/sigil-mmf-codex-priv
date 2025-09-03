@@ -1,6 +1,6 @@
 // canon_validator.rs - Validates canon JSON against MMF Canon Schema v2.2 with optional flavor fields
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;

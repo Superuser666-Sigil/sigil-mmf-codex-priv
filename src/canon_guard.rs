@@ -13,7 +13,8 @@ pub fn guard_canon_mutation(
     }
 
     if !validate_witnesses(&chain.witnesses, &crate::loa::LOA::Root, payload)
-        .map_err(|e| format!("Witness validation error: {e}"))? {
+        .map_err(|e| format!("Witness validation error: {e}"))?
+    {
         return Err("Denied: Witness validation failed.".into());
     }
 
@@ -79,17 +80,19 @@ fn extract_verdict_from_frozen_chain(chain: &FrozenChain) -> Result<Verdict, Str
             _ => Err("Invalid verdict in metadata".to_string()),
         };
     }
-    
+
     // Fallback to reasoning analysis with more sophisticated logic
-    let reasoning_text = &chain.reasoning_trace.reasoning_steps
+    let reasoning_text = &chain
+        .reasoning_trace
+        .reasoning_steps
         .iter()
         .map(|step| step.logic.clone())
         .collect::<Vec<_>>()
         .join("\n");
-    
+
     // Use more sophisticated analysis
     let verdict_score = analyze_reasoning_for_verdict(reasoning_text);
-    
+
     match verdict_score {
         score if score > 0.8 => Ok(Verdict::Allow),
         score if score < 0.2 => Ok(Verdict::Deny),
@@ -102,46 +105,74 @@ fn extract_verdict_from_frozen_chain(chain: &FrozenChain) -> Result<Verdict, Str
 fn analyze_reasoning_for_verdict(reasoning_text: &str) -> f64 {
     let text = reasoning_text.to_lowercase();
     let mut score: f64 = 0.5; // Neutral starting point
-    
+
     // Positive indicators
     let positive_keywords = [
-        "allow", "permit", "approve", "accept", "valid", "safe", "trusted",
-        "authorized", "legitimate", "compliant", "secure", "verified"
+        "allow",
+        "permit",
+        "approve",
+        "accept",
+        "valid",
+        "safe",
+        "trusted",
+        "authorized",
+        "legitimate",
+        "compliant",
+        "secure",
+        "verified",
     ];
-    
+
     // Negative indicators
     let negative_keywords = [
-        "deny", "reject", "block", "forbid", "invalid", "unsafe", "untrusted",
-        "unauthorized", "illegitimate", "non-compliant", "insecure", "unverified"
+        "deny",
+        "reject",
+        "block",
+        "forbid",
+        "invalid",
+        "unsafe",
+        "untrusted",
+        "unauthorized",
+        "illegitimate",
+        "non-compliant",
+        "insecure",
+        "unverified",
     ];
-    
+
     // Uncertainty indicators
     let uncertainty_keywords = [
-        "defer", "postpone", "review", "manual", "uncertain", "unclear",
-        "ambiguous", "conflicting", "inconclusive", "needs_review"
+        "defer",
+        "postpone",
+        "review",
+        "manual",
+        "uncertain",
+        "unclear",
+        "ambiguous",
+        "conflicting",
+        "inconclusive",
+        "needs_review",
     ];
-    
+
     // Count positive keywords
     for keyword in &positive_keywords {
         if text.contains(keyword) {
             score += 0.1;
         }
     }
-    
+
     // Count negative keywords
     for keyword in &negative_keywords {
         if text.contains(keyword) {
             score -= 0.1;
         }
     }
-    
+
     // Count uncertainty keywords
     for keyword in &uncertainty_keywords {
         if text.contains(keyword) {
             score -= 0.05; // Reduce confidence but not as much as negative
         }
     }
-    
+
     // Clamp score between 0.0 and 1.0
     score.clamp(0.0, 1.0)
 }
@@ -156,9 +187,6 @@ fn validate_frozen_chain_witnesses(chain: &FrozenChain, payload: &str) -> Result
             signature: w.signature.clone(),
         })
         .collect();
-          validate_witnesses(
-          &witnesses,
-          &crate::loa::LOA::Root,
-          payload,
-      ).map_err(|e| format!("Witness validation error: {e}"))
+    validate_witnesses(&witnesses, &crate::loa::LOA::Root, payload)
+        .map_err(|e| format!("Witness validation error: {e}"))
 }

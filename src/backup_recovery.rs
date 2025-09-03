@@ -1,9 +1,9 @@
 use crate::canon_store::CanonStore;
 use crate::canon_store_sled::CanonStoreSled;
+use crate::canonical_record::CanonicalRecord;
 use crate::loa::LOA;
 use crate::sigil_vault::VaultMemoryBlock;
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
-use crate::canonical_record::CanonicalRecord;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;

@@ -1,12 +1,12 @@
 // module_loader.rs - Module loading and execution with LOA enforcement
 
+use crate::errors::SigilResult;
+use crate::loa::LOA;
 use std::fs;
 use std::path::Path;
+use thiserror::Error;
 use toml::Value;
 use tracing::{error, info, warn};
-use thiserror::Error;
-use crate::loa::LOA;
-use crate::errors::SigilResult;
 
 #[derive(Error, Debug)]
 pub enum ModuleLoaderError {
@@ -60,17 +60,18 @@ impl ModuleRegistry {
     }
 
     pub fn run_module(&self, name: &str, ctx: &ModuleContext) -> SigilResult<String> {
-        let module = self.get_module(name)
+        let module = self
+            .get_module(name)
             .ok_or_else(|| crate::errors::SigilError::not_found("module", name))?;
-        
+
         // Check LOA requirement
         if ctx.loa < module.required_loa() {
             return Err(crate::errors::SigilError::insufficient_loa(
                 module.required_loa(),
-                ctx.loa.clone()
+                ctx.loa.clone(),
             ));
         }
-        
+
         module.run(ctx)
     }
 }
@@ -84,12 +85,16 @@ impl SigilModule for HelloModule {
     }
 
     fn run(&self, ctx: &ModuleContext) -> SigilResult<String> {
-        Ok(format!("Hello from Sigil! Session: {}, User: {}, LOA: {:?}", 
-                   ctx.session_id, ctx.user_id, ctx.loa))
+        Ok(format!(
+            "Hello from Sigil! Session: {}, User: {}, LOA: {:?}",
+            ctx.session_id, ctx.user_id, ctx.loa
+        ))
     }
 }
 
-pub fn load_and_run_modules(ctx: &crate::session_context::SessionContext) -> Result<(), ModuleLoaderError> {
+pub fn load_and_run_modules(
+    ctx: &crate::session_context::SessionContext,
+) -> Result<(), ModuleLoaderError> {
     info!(
         message = "Loading modules for session",
         session_id = %ctx.session_id

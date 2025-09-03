@@ -1,7 +1,7 @@
 use crate::audit_chain::{FrozenChain, ReasoningChain};
 use crate::canonical_record::CanonicalRecord;
 use serde_json;
-use std::fs::{create_dir_all, File, OpenOptions};
+use std::fs::{File, OpenOptions, create_dir_all};
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
@@ -32,10 +32,9 @@ impl AuditStore {
     pub fn write_reasoning_chain(&self, chain: &ReasoningChain) -> Result<(), String> {
         // Wrap ReasoningChain in CanonicalRecord
         let canonical_record = CanonicalRecord::from_reasoning_chain(
-            chain, 
-            "system",  // ReasoningChains are system-generated
-            "audit",   // audit space
-            None       // no previous record for now
+            chain, "system", // ReasoningChains are system-generated
+            "audit",  // audit space
+            None,     // no previous record for now
         )?;
 
         let file = OpenOptions::new()
@@ -67,10 +66,9 @@ impl AuditStore {
 
         // Wrap FrozenChain in CanonicalRecord
         let canonical_record = CanonicalRecord::from_frozen_chain(
-            chain, 
-            "system",  // FrozenChains are system-generated
-            "audit",   // audit space
-            None       // no previous record for now
+            chain, "system", // FrozenChains are system-generated
+            "audit",  // audit space
+            None,     // no previous record for now
         )?;
 
         let file = OpenOptions::new()
@@ -131,7 +129,7 @@ impl AuditStore {
                 if !chain.verify_integrity()? {
                     return Err("Retrieved FrozenChain failed integrity verification".into());
                 }
-                
+
                 // Keep the latest occurrence (last one wins in append-only log)
                 latest_chain = Some(chain);
             }

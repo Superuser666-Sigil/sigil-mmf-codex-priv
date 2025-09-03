@@ -4,11 +4,11 @@ use serde_json::Value;
 
 use crate::audit_chain::{FrozenChain, ReasoningChain};
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
-use sha2::{Sha256, Digest};
-use ed25519_dalek::{SigningKey, Signer};
-use rand_core::OsRng;
-use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
+use ed25519_dalek::{Signer, SigningKey};
 use hex;
+use rand_core::OsRng;
+use sha2::{Digest, Sha256};
 
 /// A canonical record representation used for Codex Nexus.
 ///

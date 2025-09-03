@@ -1,4 +1,4 @@
-use std::fs::{read_dir, File};
+use std::fs::{File, read_dir};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
@@ -54,7 +54,8 @@ impl CanonNode {
 
         // Parse flags if present
         if let Some(flags) = json.get("flags")
-            && let Some(flags_array) = flags.as_array() {
+            && let Some(flags_array) = flags.as_array()
+        {
             for flag in flags_array {
                 if let Some(flag_str) = flag.as_str() {
                     node.flags.push(flag_str.to_string());
@@ -64,7 +65,8 @@ impl CanonNode {
 
         // Parse tags if present
         if let Some(tags) = json.get("tags")
-            && let Some(tags_array) = tags.as_array() {
+            && let Some(tags_array) = tags.as_array()
+        {
             for tag in tags_array {
                 if let Some(tag_str) = tag.as_str() {
                     node.tags.push(tag_str.to_string());
@@ -139,7 +141,8 @@ pub fn load_canon_entries(file: &str) -> Result<Vec<CanonNode>, String> {
     let mut nodes = Vec::new();
 
     if let Some(entries) = json.get("entries")
-        && let Some(entries_array) = entries.as_array() {
+        && let Some(entries_array) = entries.as_array()
+    {
         for entry in entries_array {
             if let Ok(node) = CanonNode::from_json(entry) {
                 nodes.push(node);

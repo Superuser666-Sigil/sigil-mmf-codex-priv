@@ -47,7 +47,9 @@ impl MMFConfig {
             return Err("MMF_AUDIT_LOG cannot be empty".to_string());
         }
 
-        let encryption_key_b64 = std::env::var("SIGIL_AES_KEY").ok().filter(|s| !s.is_empty());
+        let encryption_key_b64 = std::env::var("SIGIL_AES_KEY")
+            .ok()
+            .filter(|s| !s.is_empty());
 
         let allow_operator_canon_write = std::env::var("MMF_TRUST_OP_WRITE")
             .ok()
@@ -65,4 +67,3 @@ impl MMFConfig {
         })
     }
 }
-

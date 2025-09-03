@@ -22,13 +22,13 @@ pub mod audit_store;
 pub mod audit_verifier;
 pub mod elevation_verifier;
 pub mod loa;
+pub mod secure_audit_chain;
 pub mod trust_registry;
 pub mod trusted_knowledge;
-pub mod secure_audit_chain;
 
 // New security and trust modules
-pub mod trust_linear;
 pub mod quorum_system;
+pub mod trust_linear;
 
 // License & seal tools
 pub mod key_manager;
@@ -64,13 +64,12 @@ pub mod sigil_runtime_core;
 pub mod input_validator;
 pub mod sigil_session;
 
-
 // Platform optimizations
 pub mod platform_optimizations;
 
 // Security protections
-pub mod rate_limiter;
 pub mod csrf_protection;
+pub mod rate_limiter;
 pub mod secure_file_ops;
 
 // Encryption & integrity
@@ -95,31 +94,29 @@ pub mod witness_registry;
 // Logging
 pub mod log_sink;
 
-
-
 #[cfg(test)]
 mod tests {
     pub mod audit_chain_test;
     pub mod canon_store;
-    pub mod security_tests;
-    pub mod module_tests;
-    pub mod module_integration_test;
+    pub mod key_lifecycle_test;
     pub mod module_execution_comprehensive_test;
+    pub mod module_integration_test;
+    pub mod module_tests;
     pub mod quorum_enforcement_test;
     pub mod quorum_interactive_workflow_test;
-    pub mod key_lifecycle_test;
+    pub mod security_tests;
 }
 
 // Re-export key types for the two-phase ReasoningChain -> FrozenChain approach
 pub use audit_chain::{
     CryptographicWitness, // Cryptographic verification
     FrozenChain,          // Phase 2: Immutable record for cryptographic integrity
-    TrustInfo,            // Trust scoring
     InputSnapshot,        // Immutable input data
     OutputSnapshot,       // Immutable output data
     ReasoningChain,       // Phase 1: Mutable process for "thinking out loud"
     ReasoningTrace,       // Immutable reasoning steps
     TrainingMetadata,     // ML training metadata
+    TrustInfo,            // Trust scoring
     Verdict,              // Decision outcomes
 };
 
