@@ -12,7 +12,7 @@ fn test_reasoning_chain_to_frozen_chain_workflow() {
     chain.add_reasoning_step("2 + 3 = 5");
     chain.add_suggestion("The answer is 5");
     chain.set_verdict(Verdict::Deny);
-    chain.set_irl_score(0.98, false);
+    chain.set_trust_score(0.98, false);
     
     // Finalize the reasoning
     assert!(chain.finalize_reasoning().is_ok());
@@ -36,7 +36,7 @@ fn test_frozen_chain_integrity() {
     chain.add_reasoning_step("This is a test");
     chain.add_suggestion("Test completed");
     chain.set_verdict(Verdict::Deny);
-    chain.set_irl_score(0.9, false);
+    chain.set_trust_score(0.9, false);
     chain.finalize_reasoning().unwrap();
 
     // Freeze it
@@ -60,7 +60,7 @@ fn test_chain_lineage() {
     chain1.add_reasoning_step("This is the first");
     chain1.add_suggestion("First result");
     chain1.set_verdict(Verdict::Deny);
-    chain1.set_irl_score(0.8, false);
+    chain1.set_trust_score(0.8, false);
     chain1.finalize_reasoning().unwrap();
 
     let store = AuditStore::new("test_logs/reasoning_chains.jsonl", "test_logs/frozen_chains.jsonl");
@@ -72,7 +72,7 @@ fn test_chain_lineage() {
     chain2.add_reasoning_step("This builds on the first");
     chain2.add_suggestion("Second result");
     chain2.set_verdict(Verdict::Deny);
-    chain2.set_irl_score(0.9, false);
+    chain2.set_trust_score(0.9, false);
     chain2.finalize_reasoning().unwrap();
 
     let mut frozen2 = store.freeze_and_store_chain(chain2).unwrap();
@@ -95,7 +95,7 @@ fn test_incomplete_reasoning_chain_cannot_be_frozen() {
     // Missing reasoning steps
     chain.add_suggestion("But has a suggestion");
     chain.set_verdict(Verdict::Defer); // Still deferring
-    chain.set_irl_score(0.5, false);
+    chain.set_trust_score(0.5, false);
 
     // Should not be able to finalize
     assert!(chain.finalize_reasoning().is_err());
@@ -113,7 +113,7 @@ fn test_frozen_chain_ed25519_signature_verification() {
     chain.add_reasoning_step("This is a test of cryptographic signing");
     chain.add_suggestion("Test completed successfully");
     chain.set_verdict(Verdict::Deny);
-    chain.set_irl_score(0.95, false);
+    chain.set_trust_score(0.95, false);
     chain.finalize_reasoning().unwrap();
 
     // Freeze it (this should sign with Ed25519)

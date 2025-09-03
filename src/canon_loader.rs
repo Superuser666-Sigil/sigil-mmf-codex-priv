@@ -94,7 +94,7 @@ pub fn load_from_jsonl(dir: &Path) -> Result<Vec<CanonNode>, String> {
                 let mut chain =
                     ReasoningChain::new(format!("canon_load:{}", node.id), LoaLevel::Root);
                 chain.set_verdict(Verdict::Allow);
-                chain.set_irl_score(1.0, true);
+                chain.set_trust_score(1.0, true);
                 chain.set_scope(ModuleScope {
                     user_id: "bootstrap".into(),
                     module_id: "canon_loader".into(),

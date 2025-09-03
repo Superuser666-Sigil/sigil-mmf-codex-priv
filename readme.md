@@ -218,8 +218,8 @@ cargo test --lib test_canon_write_verify_round_trip_with_quorum -- --nocapture  
 ```bash
 MMF_LICENSE_SECRET="your_license_secret"
 MMF_DB_BACKEND="sled"  # Default encrypted storage
-MMF_IRL_THRESHOLD="0.4"  # Trust evaluation threshold
-MMF_IRL_ENFORCEMENT_MODE="active"  # active | strict | passive
+MMF_IRL_THRESHOLD="0.4"  # Trust evaluation threshold (legacy)
+MMF_IRL_ENFORCEMENT_MODE="active"  # active | strict | passive (legacy)
 MMF_TRUST_DEFAULT_LOA="Observer"  # Default access level
 RUST_LOG="info,mmf_sigil=debug"  # Logging configuration
 ```
@@ -232,7 +232,7 @@ db_backend = "sled"
 [irl]
 enforcement_mode = "active"
 threshold = 0.4
-telemetry_enabled = false
+# IRL features deprecated - using logistic trust model
 
 [trust]
 default_loa = "Observer"

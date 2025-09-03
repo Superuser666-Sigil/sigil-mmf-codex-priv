@@ -72,7 +72,7 @@ pub struct LicenseValidationResult {
     pub license: SigilLicense,
     pub valid: bool,
     pub message: String,
-    pub irl_score: f32,
+    pub trust_score: f32,
     pub audit: AuditEvent,
 }
 
@@ -130,7 +130,7 @@ pub fn validate_license(
         license,
         valid: score >= 0.9,
         message: msg,
-        irl_score: score,
+        trust_score: score,
         audit,
     })
 }

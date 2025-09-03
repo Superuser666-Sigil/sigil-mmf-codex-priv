@@ -11,7 +11,7 @@
 use crate::sigil_runtime_core::SigilRuntimeCore;
 use crate::canon_store::CanonStore;
 use crate::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
-use crate::runtime_config::{EnforcementMode, RuntimeConfig as IRLConfig};
+use crate::runtime_config::{EnforcementMode, RuntimeConfig};
 use crate::loa::LOA;
 use crate::keys::{CanonSigningKey, KeyManager};
 use sha2::Digest;
@@ -33,7 +33,7 @@ fn test_interactive_quorum_workflow_full_cycle() {
         EncryptedCanonStoreSled::new(path, &encryption_key).expect("should create encrypted store")
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,
@@ -271,7 +271,7 @@ fn test_proposal_status_tracking() {
         EncryptedCanonStoreSled::new(path, &encryption_key).expect("should create encrypted store")
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,
@@ -369,7 +369,7 @@ fn test_partial_quorum_failure_scenarios() {
         EncryptedCanonStoreSled::new(path, &encryption_key).expect("should create encrypted store")
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,

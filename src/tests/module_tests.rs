@@ -6,7 +6,7 @@
 
 use crate::sigil_runtime_core::SigilRuntimeCore;
 use crate::canon_store_sled::CanonStoreSled;
-use crate::runtime_config::{EnforcementMode, RuntimeConfig as IRLConfig};
+use crate::runtime_config::{EnforcementMode, RuntimeConfig};
 use crate::loa::LOA;
 use crate::module_loader::ModuleContext;
 use tempfile::TempDir;
@@ -21,7 +21,7 @@ fn test_module_loa_enforcement_operator_success() {
     ));
     
     // Create runtime with Operator LOA
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,
@@ -59,7 +59,7 @@ fn test_module_loa_enforcement_guest_denied() {
     ));
     
     // Create runtime with Guest LOA
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,
@@ -100,7 +100,7 @@ fn test_module_registry_nonexistent_module() {
         CanonStoreSled::new(temp_dir.path().to_str().unwrap()).unwrap()
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,
@@ -140,7 +140,7 @@ fn test_module_registry_builtin_modules() {
         CanonStoreSled::new(temp_dir.path().to_str().unwrap()).unwrap()
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,

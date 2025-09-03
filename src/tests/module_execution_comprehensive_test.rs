@@ -9,7 +9,7 @@
 
 use crate::sigil_runtime_core::SigilRuntimeCore;
 use crate::canon_store_sled::CanonStoreSled;
-use crate::runtime_config::{EnforcementMode, RuntimeConfig as IRLConfig};
+use crate::runtime_config::{EnforcementMode, RuntimeConfig};
 use crate::loa::LOA;
 use crate::module_loader::{ModuleContext, SigilModule};
 use crate::errors::{SigilResult, SigilError};
@@ -91,7 +91,7 @@ fn test_comprehensive_loa_enforcement() {
         CanonStoreSled::new(temp_dir.path().to_str().unwrap()).unwrap()
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,
@@ -185,7 +185,7 @@ fn test_module_error_handling() {
         CanonStoreSled::new(temp_dir.path().to_str().unwrap()).unwrap()
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,
@@ -247,7 +247,7 @@ fn test_module_registry_management() {
         CanonStoreSled::new(temp_dir.path().to_str().unwrap()).unwrap()
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,
@@ -288,7 +288,7 @@ fn test_module_context_validation() {
         CanonStoreSled::new(temp_dir.path().to_str().unwrap()).unwrap()
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,
@@ -341,7 +341,7 @@ fn test_module_isolation() {
         CanonStoreSled::new(temp_dir.path().to_str().unwrap()).unwrap()
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,

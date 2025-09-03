@@ -19,7 +19,7 @@ use tempfile::TempDir;
 use mmf_sigil::{
     sigil_runtime_core::SigilRuntimeCore,
     canon_store_sled::CanonStoreSled,
-    runtime_config::{EnforcementMode, RuntimeConfig as IRLConfig},
+    runtime_config::{EnforcementMode, RuntimeConfig},
     loa::LOA,
     sigilweb::add_trust_routes,
     canonical_record::CanonicalRecord,
@@ -34,7 +34,7 @@ async fn create_test_runtime(loa: LOA) -> (Arc<RwLock<SigilRuntimeCore>>, TempDi
         CanonStoreSled::new(temp_dir.path().to_str().unwrap()).expect("Failed to create Canon store")
     ));
     
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.4, // Match the trust model threshold
         active_model: None,
@@ -516,7 +516,7 @@ fn e2e_tamper_audit_reasoning_chain_integrity() {
     chain.add_reasoning("Test reasoning step");
     chain.add_suggestion("Test suggestion");
     chain.set_verdict(Verdict::Deny); // Use Deny to avoid witness quorum requirement
-    chain.set_irl_score(0.8, true);
+    chain.set_trust_score(0.8, true);
     
     // Finalize the chain first
     let mut finalized_chain = chain;

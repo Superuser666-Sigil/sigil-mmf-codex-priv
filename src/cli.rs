@@ -297,7 +297,7 @@ pub fn dispatch(cli: Cli) {
                 || -> Result<Arc<RwLock<crate::sigil_runtime_core::SigilRuntimeCore>>, String> {
 
                     use crate::config_loader::load_config;
-                    use crate::runtime_config::{EnforcementMode, RuntimeConfig as RuntimeIRLConfig};
+                    use crate::runtime_config::{EnforcementMode, RuntimeConfig};
                     use crate::loa::LOA;
                     use crate::sigil_runtime_core::SigilRuntimeCore;
                     use std::sync::Mutex;
@@ -306,7 +306,7 @@ pub fn dispatch(cli: Cli) {
                     let app_cfg =
                         load_config().map_err(|e| format!("Failed to load config: {e}"))?;
 
-                    // Map loader IRL config → runtime IRL config
+                    // Map config to runtime config
                     let enforcement_mode =
                         match app_cfg.irl.enforcement_mode.to_lowercase().as_str() {
                             "active" => EnforcementMode::Active,
@@ -314,12 +314,12 @@ pub fn dispatch(cli: Cli) {
                             _ => EnforcementMode::Active,
                         };
 
-                    let runtime_cfg = RuntimeIRLConfig {
-                        active_model: app_cfg.irl.active_model.clone(),
+                    let runtime_cfg = RuntimeConfig {
+                        active_model: None,
                         threshold: app_cfg.irl.threshold,
                         enforcement_mode,
-                        telemetry_enabled: app_cfg.irl.telemetry_enabled,
-                        explanation_enabled: app_cfg.irl.explanation_enabled,
+                        telemetry_enabled: false,
+                        explanation_enabled: false,
                     };
 
                     // Use encrypted Sled backend with proper key management
@@ -333,15 +333,7 @@ pub fn dispatch(cli: Cli) {
                         SigilRuntimeCore::new(LOA::Observer, canon_store, runtime_cfg)
                             .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
 
-                    // Respect telemetry/explainer flags
-                    #[cfg(feature = "irl")]
-                    if app_cfg.irl.telemetry_enabled {
-                        runtime.enable_telemetry();
-                    }
-                    #[cfg(feature = "irl")]
-                    if app_cfg.irl.explanation_enabled {
-                        runtime.enable_explanation();
-                    }
+                    // IRL telemetry/explainer removed
                     // Telemetry and explanation enabling is now handled by the runtime constructor.
 
                     Ok(Arc::new(RwLock::new(runtime)))

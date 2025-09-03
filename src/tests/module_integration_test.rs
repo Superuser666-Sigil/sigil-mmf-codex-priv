@@ -13,7 +13,7 @@ use tower::ServiceExt;
 
 use crate::sigil_runtime_core::SigilRuntimeCore;
 use crate::canon_store_sled::CanonStoreSled;
-use crate::runtime_config::{EnforcementMode, RuntimeConfig as IRLConfig};
+use crate::runtime_config::{EnforcementMode, RuntimeConfig};
 use crate::loa::LOA;
 use crate::sigilweb::{add_trust_routes, ModuleRunRequest};
 use tempfile::TempDir;
@@ -27,7 +27,7 @@ async fn create_test_app(loa: LOA) -> Router {
     ));
     
     // Create runtime with specified LOA
-    let config = IRLConfig {
+    let config = RuntimeConfig {
         enforcement_mode: EnforcementMode::Active,
         threshold: 0.5,
         active_model: None,

@@ -1,29 +1,20 @@
 //! sigil_runtime_core.rs
 //! Core enforcement and validation logic for MMF + Sigil runtime.
-//! Integrates trust model, IRL reward system, fallback logic, telemetry, and enforcement modes.
+//! Integrates trust model, fallback logic, telemetry, and enforcement modes.
 
 use crate::audit::AuditEvent;
 use crate::canon_store::CanonStore;
 
 use crate::errors::{SafeLock, SigilResult};
-#[cfg(feature = "irl")]
-use crate::irl_explainer::{MultiModelExplainer, TrustExplanation};
-use crate::runtime_config::{EnforcementMode, RuntimeConfig as IRLConfig, TrustEvaluation};
-#[cfg(feature = "irl")]
-use crate::irl_reward::RewardModel;
-#[cfg(feature = "irl")]
-use crate::irl_telemetry::IRLTelemetry;
-#[cfg(feature = "irl")]
-use crate::irl_trust_evaluator::TrustEvaluator;
+use crate::runtime_config::{EnforcementMode, RuntimeConfig, TrustEvaluation};
 use crate::loa::LOA;
 use crate::log_sink::LogEvent;
 use std::str::FromStr;
 
 // Import the logistic trust model registry and features.  This will allow
-// SigilRuntimeCore to evaluate audit events using a real trust model
-// instead of the keyword‑based or IRL stubs.  The TrustModelRegistry
-// provides a default linear model with five features and a logistic
-// threshold.
+// SigilRuntimeCore to evaluate audit events using a real trust model.
+// The TrustModelRegistry provides a default linear model with five features
+// and a logistic threshold.
 use crate::trust_linear::{TrustModelRegistry, TrustFeatures};
 
 // Import the quorum system for witness signature validation
@@ -36,22 +27,17 @@ use crate::witness_registry::WitnessRegistry;
 use crate::module_loader::{ModuleRegistry, HelloModule};
 
 use log::{error, info};
-#[cfg(feature = "irl")]
-use log::{debug, warn};
 use std::sync::{Arc, Mutex};
 
 pub struct SigilRuntimeCore {
     pub loa: LOA,
     pub enforcement_mode: EnforcementMode,
-    #[cfg(feature = "irl")]
-    pub active_model_id: Option<String>,
+
     pub threshold: f64,
     pub canon_store: Arc<Mutex<dyn CanonStore>>,
-    #[cfg(feature = "irl")]
-    pub trust_evaluator: TrustEvaluator,
 
-    /// Registry of logistic trust models.  In the absence of a custom IRL
-    /// model, the runtime will use this registry to compute trust scores
+
+    /// Registry of logistic trust models used to compute trust scores
     /// based on action, target, LOA, rate limiting and input entropy.
     pub trust_registry: TrustModelRegistry,
 
@@ -63,68 +49,16 @@ pub struct SigilRuntimeCore {
 
     /// Module registry for executing LOA-gated modules
     pub module_registry: std::sync::Mutex<ModuleRegistry>,
-    #[cfg(feature = "irl")]
-    pub telemetry: Option<IRLTelemetry>,
-    #[cfg(feature = "irl")]
-    pub explainer: Option<MultiModelExplainer>,
+
 }
 
 impl SigilRuntimeCore {
     pub fn new(
         loa: LOA,
         canon_store: Arc<Mutex<dyn CanonStore>>,
-        config: IRLConfig,
+        config: RuntimeConfig,
     ) -> SigilResult<Self> {
-        #[cfg(feature = "irl")]
-        let mut trust_evaluator = TrustEvaluator::new();
-        #[cfg(feature = "irl")]
-        let mut explainer = MultiModelExplainer::new();
-        #[cfg(feature = "irl")]
-        let mut active_model_id = None;
-        #[cfg(feature = "irl")]
-        let mut telemetry = None;
-
-        #[cfg(feature = "irl")]
-        if let Some(model_id) = &config.active_model {
-            match canon_store.safe_lock() {
-                Ok(store) => {
-                    // Fetch reward model records from canon
-                    let records = store.list_records(Some("irl_reward"), &loa);
-                    debug!("Found {} IRL reward entries in canon store", records.len());
-                    for rec in records {
-                        // Payload should be a TrustedKnowledgeEntry serialized as JSON
-                        if let Ok(entry) = serde_json::from_value::<crate::trusted_knowledge::TrustedKnowledgeEntry>(rec.payload.clone()) {
-                            // entry.content should contain the RewardModel JSON
-                            match serde_json::from_str::<RewardModel>(&entry.content) {
-                                Ok(model) if model.model_id == *model_id => {
-                                    trust_evaluator.add_model(model.clone(), config.threshold);
-                                    explainer.add_model(model.clone(), config.threshold);
-                                    active_model_id = Some(model.model_id.clone());
-                                    if config.telemetry_enabled {
-                                        telemetry = Some(IRLTelemetry::new("model_loaded", &model.model_id));
-                                    }
-                                    info!("Loaded IRL model: {} with threshold: {}", model.model_id, config.threshold);
-                                    break;
-                                }
-                                Ok(_) => {
-                                    debug!("Skipping IRL model with different ID");
-                                }
-                                Err(e) => {
-                                    warn!("Failed to deserialize IRL model from record {}: {}", rec.id, e);
-                                }
-                            }
-                        }
-                    }
-                    if active_model_id.is_none() {
-                        warn!("Requested IRL model '{model_id}' not found in canon store");
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to acquire canon store lock during initialization: {e}");
-                    return Err(e);
-                }
-            }
-        }
+        // IRL-related initialization removed - using logistic trust model only
 
         info!(
             "SigilRuntimeCore initialized with LOA: {:?}, enforcement: {:?}",
@@ -151,21 +85,8 @@ impl SigilRuntimeCore {
         Ok(Self {
             loa,
             enforcement_mode: config.enforcement_mode,
-            #[cfg(feature = "irl")]
-            active_model_id,
             threshold: config.threshold,
             canon_store,
-            #[cfg(feature = "irl")]
-            trust_evaluator,
-            #[cfg(feature = "irl")]
-            telemetry,
-            #[cfg(feature = "irl")]
-            explainer: if config.explanation_enabled {
-                Some(explainer)
-            } else {
-                None
-            },
-
             trust_registry,
             quorum_system,
             witness_registry,
@@ -212,11 +133,7 @@ impl SigilRuntimeCore {
             log.write_to("logs/trust_scores.log").ok();
         }
 
-        // Log telemetry
-        #[cfg(feature = "irl")]
-        if let Some(ref telemetry) = self.telemetry {
-            telemetry.record_decision(event, score, allowed);
-        }
+        // Telemetry removed with IRL cleanup
         TrustEvaluation::new(score, allowed)
     }
 
@@ -240,13 +157,7 @@ impl SigilRuntimeCore {
         }
     }
 
-    /// Generate explanation for trust decision
-    #[cfg(feature = "irl")]
-    pub fn explain(&self, event: &AuditEvent) -> Option<TrustExplanation> {
-        self.explainer
-            .as_ref()
-            .map(|explainer| explainer.explain_event(event))
-    }
+
 
     /// Refresh models from canon store
     pub fn refresh_models(&mut self) -> SigilResult<()> {
@@ -262,28 +173,7 @@ impl SigilRuntimeCore {
             model_entries.len()
         );
 
-        // Update active model if available.  Canonical records store the
-        // trusted knowledge entry as a JSON payload; we must extract
-        // the TrustedKnowledgeEntry from the payload field to inspect
-        // model IDs.
-        #[cfg(feature = "irl")]
-        if let Some(active_model_id) = &self.active_model_id {
-            let mut found = false;
-            for rec in &model_entries {
-                if let Ok(entry_val) = serde_json::from_value::<crate::trusted_knowledge::TrustedKnowledgeEntry>(rec.payload.clone()) {
-                    if entry_val.id == *active_model_id {
-                        found = true;
-                        break;
-                    }
-                }
-            }
-            if !found {
-                return Err(crate::errors::SigilError::canon(
-                    "refresh_models",
-                    "Active model not found in canon store",
-                ));
-            }
-        }
+        // Active model tracking removed with IRL cleanup
 
         // Update threshold from canon if available.  Look for a record
         // with id "trust_threshold" in the model records; parse its
@@ -308,57 +198,33 @@ impl SigilRuntimeCore {
         Ok(())
     }
 
-    /// Enable telemetry
-    #[cfg(feature = "irl")]
-    pub fn enable_telemetry(&mut self) {
-        self.telemetry = Some(IRLTelemetry::new("runtime_telemetry", "enabled"));
-    }
 
-    /// Enable explanation
-    #[cfg(feature = "irl")]
-    pub fn enable_explanation(&mut self) {
-        self.explainer = Some(MultiModelExplainer::new());
-    }
 
     /// Get runtime status
     pub fn status(&self) -> serde_json::Value {
-        #[cfg(feature = "irl")]
-        {
-            serde_json::json!({
-                "loa": format!("{:?}", self.loa),
-                "enforcement_mode": format!("{:?}", self.enforcement_mode),
-                "threshold": self.threshold,
-                "active_model": self.active_model_id,
-                "telemetry_enabled": self.telemetry.is_some(),
-                "explanation_enabled": self.explainer.is_some(),
-            })
-        }
-        #[cfg(not(feature = "irl"))]
-        {
-            serde_json::json!({
-                "loa": format!("{:?}", self.loa),
-                "enforcement_mode": format!("{:?}", self.enforcement_mode),
-                "threshold": self.threshold,
-            })
-        }
+        serde_json::json!({
+            "loa": format!("{:?}", self.loa),
+            "enforcement_mode": format!("{:?}", self.enforcement_mode),
+            "threshold": self.threshold,
+        })
     }
 }
 
 /// Run a Sigil session with proper config integration
 pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> Result<(), String> {
-    // Map config to IRL runtime config
+    // Map config to runtime config
     let enforcement_mode = match config.irl.enforcement_mode.to_lowercase().as_str() {
         "active" => EnforcementMode::Active,
         "strict" => EnforcementMode::Strict,
         _ => EnforcementMode::Active,
     };
     
-    let irl_config = IRLConfig {
-        active_model: config.irl.active_model.clone(),
+    let runtime_config = RuntimeConfig {
         threshold: config.irl.threshold,
         enforcement_mode,
-        telemetry_enabled: config.irl.telemetry_enabled,
-        explanation_enabled: config.irl.explanation_enabled,
+        telemetry_enabled: false,
+        active_model: None,
+        explanation_enabled: false,
     };
 
     // Use default canon store path, with proper encryption key management
@@ -373,7 +239,7 @@ pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> Result<(),
     let session_loa = LOA::from_str(&config.trust.default_loa).unwrap_or(LOA::Observer);
     
     // Initialize runtime core with config-based parameters
-    let mut runtime = SigilRuntimeCore::new(session_loa, canon_store, irl_config)
+    let mut runtime = SigilRuntimeCore::new(session_loa, canon_store, runtime_config)
         .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
 
     // For MVP: Use config-only threshold to avoid half-doing both config and canon
@@ -385,12 +251,6 @@ pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> Result<(),
     println!("🚀 Sigil runtime session started");
     println!("   LOA: {:?}", runtime.loa);
     println!("   Enforcement: {:?}", runtime.enforcement_mode);
-    #[cfg(feature = "irl")]
-    println!(
-        "   Active Model: {}",
-        runtime.active_model_id.as_deref().unwrap_or("none")
-    );
-    #[cfg(not(feature = "irl"))]
     println!("   Active Model: logistic-builtin");
     println!("   Threshold: {:.2}", runtime.threshold);
     println!("   Canon Store: {}", canon_store_path);

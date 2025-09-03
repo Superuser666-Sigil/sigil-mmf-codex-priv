@@ -18,7 +18,7 @@ pub enum Verdict {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct IRLInfo {
+pub struct TrustInfo {
     pub model_id: String,
     pub score: f32,
     pub allowed: bool,
@@ -41,7 +41,7 @@ pub struct ReasoningChain {
     pub suggestion: String,
     pub verdict: Verdict,
     pub audit: AuditMetadata,
-    pub irl: IRLInfo,
+    pub trust: TrustInfo,
     pub scope: ModuleScope,
     pub witnesses: Vec<WitnessSignature>,
     // SECURITY: Ed25519 signature fields for content integrity
@@ -64,8 +64,8 @@ impl ReasoningChain {
                 loa,
                 chain_id: Uuid::new_v4().to_string(),
             },
-            irl: IRLInfo {
-                model_id: "sigil_trust_v1".into(),
+            trust: TrustInfo {
+                model_id: "logistic_trust_v1".into(),
                 score: 0.0,
                 allowed: false,
             },
@@ -104,9 +104,9 @@ impl ReasoningChain {
         self.verdict = verdict;
     }
 
-    pub fn set_irl_score(&mut self, score: f32, allowed: bool) {
-        self.irl.score = score;
-        self.irl.allowed = allowed;
+    pub fn set_trust_score(&mut self, score: f32, allowed: bool) {
+        self.trust.score = score;
+        self.trust.allowed = allowed;
     }
 
     pub fn set_scope(&mut self, scope: ModuleScope) {
@@ -130,9 +130,9 @@ impl ReasoningChain {
             return Err("Reasoning chain cannot be empty".into());
         }
 
-        if self.verdict == Verdict::Allow && !self.irl.allowed {
+        if self.verdict == Verdict::Allow && !self.trust.allowed {
             return Err(
-                "Inconsistent verdict and IRL trust: verdict=Allow but IRL.allowed=false".into(),
+                "Inconsistent verdict and trust: verdict=Allow but trust.allowed=false".into(),
             );
         }
 
@@ -153,7 +153,7 @@ impl ReasoningChain {
             "suggestion": self.suggestion,
             "verdict": self.verdict,
             "audit": self.audit,
-            "irl": self.irl,
+            "trust": self.trust,
             "scope": self.scope,
             "witnesses": self.witnesses,
         });
@@ -185,7 +185,7 @@ impl ReasoningChain {
             "suggestion": self.suggestion,
             "verdict": self.verdict,
             "audit": self.audit,
-            "irl": self.irl,
+            "trust": self.trust,
             "scope": self.scope,
             "witnesses": self.witnesses,
         });
@@ -546,15 +546,15 @@ impl ReasoningTrace {
             step_id: "step_1".to_string(),
             description: "Main reasoning".to_string(),
             logic: chain.reasoning.clone(),
-            confidence: chain.irl.score,
+            confidence: chain.trust.score,
             timestamp: chain.audit.timestamp,
         }];
 
         Ok(ReasoningTrace {
             reasoning_steps,
             intermediate_decisions: Vec::new(),
-            confidence_scores: vec![chain.irl.score],
-            uncertainty_measures: vec![1.0 - chain.irl.score],
+            confidence_scores: vec![chain.trust.score],
+            uncertainty_measures: vec![1.0 - chain.trust.score],
             reasoning_hash,
         })
     }
@@ -568,8 +568,8 @@ impl OutputSnapshot {
 
         Ok(OutputSnapshot {
             final_output: chain.suggestion.clone(),
-            output_confidence: chain.irl.score,
-            output_uncertainty: 1.0 - chain.irl.score,
+            output_confidence: chain.trust.score,
+            output_uncertainty: 1.0 - chain.trust.score,
             alternative_outputs: Vec::new(),
             output_hash,
         })
@@ -579,7 +579,7 @@ impl OutputSnapshot {
 impl TrainingMetadata {
     fn from_chain(chain: &ReasoningChain) -> Result<Self, String> {
         Ok(TrainingMetadata {
-            model_id: chain.irl.model_id.clone(),
+            model_id: chain.trust.model_id.clone(),
             training_run_id: chain.audit.session_id.clone(),
             hyperparameters: HashMap::new(),
             training_data_version: "canon_v1".to_string(),

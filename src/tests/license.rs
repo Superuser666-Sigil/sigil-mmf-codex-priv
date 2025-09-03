@@ -15,28 +15,28 @@ mod tests {
     fn test_expired_license_should_fail() {
         let result = validate_license("tests/assets/sigil_license_expired.toml", "test-runtime", "test-fp").unwrap();
         assert!(!result.valid);
-        assert_eq!(result.irl_score, 0.0);
+        assert_eq!(result.trust_score, 0.0);
     }
     
     #[test]
     fn test_mismatched_runtime_should_score_0_2() {
         let result = validate_license("tests/assets/sigil_license_bad_runtime.toml", "test-runtime", "test-fp").unwrap();
         assert!(!result.valid);
-        assert_eq!(result.irl_score, 0.2);
+        assert_eq!(result.trust_score, 0.2);
     }
     
     #[test]
     fn test_mismatched_fingerprint_should_score_0_4() {
         let result = validate_license("tests/assets/sigil_license_bad_fp.toml", "test-runtime", "test-fp").unwrap();
         assert!(!result.valid);
-        assert_eq!(result.irl_score, 0.4);
+        assert_eq!(result.trust_score, 0.4);
     }
     
     #[test]
     fn test_unsealed_license_should_score_0_5() {
         let result = validate_license("tests/assets/sigil_license_unsealed.toml", "test-runtime", "test-fp").unwrap();
         assert!(!result.valid);
-        assert_eq!(result.irl_score, 0.5);
+        assert_eq!(result.trust_score, 0.5);
     }
     
     #[test]

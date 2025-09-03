@@ -8,7 +8,7 @@ use mmf_sigil::sigilweb::{build_trust_router, TrustCheckRequest};
 use mmf_sigil::sigil_runtime_core::SigilRuntimeCore;
 use mmf_sigil::canon_store_sled::CanonStoreSled;
 use mmf_sigil::loa::LOA;
-use mmf_sigil::runtime_config::RuntimeConfig as IRLConfig;
+use mmf_sigil::runtime_config::RuntimeConfig;
 use std::sync::Mutex;
 use serde_json::json;
 use std::sync::{Arc, RwLock};
@@ -20,7 +20,7 @@ async fn trust_check_returns_200_on_valid_payload() {
     let temp_dir = tempfile::tempdir().expect("temp dir should be created");
     let path = temp_dir.path().to_str().unwrap();
     let store = CanonStoreSled::new(path).expect("should create canon store");
-    let core = SigilRuntimeCore::new(LOA::Observer, Arc::new(Mutex::new(store)), IRLConfig::default()).expect("runtime init");
+    let core = SigilRuntimeCore::new(LOA::Observer, Arc::new(Mutex::new(store)), RuntimeConfig::default()).expect("runtime init");
     let core = Arc::new(RwLock::new(core));
     let app: Router = build_trust_router(core);
 
@@ -48,7 +48,7 @@ async fn trust_check_rejects_malformed_loa() {
     let temp_dir = tempfile::tempdir().expect("temp dir should be created");
     let path = temp_dir.path().to_str().unwrap();
     let store = CanonStoreSled::new(path).expect("should create canon store");
-    let core = SigilRuntimeCore::new(LOA::Observer, Arc::new(Mutex::new(store)), IRLConfig::default()).expect("runtime init");
+    let core = SigilRuntimeCore::new(LOA::Observer, Arc::new(Mutex::new(store)), RuntimeConfig::default()).expect("runtime init");
     let core = Arc::new(RwLock::new(core));
     let app = build_trust_router(core);
 

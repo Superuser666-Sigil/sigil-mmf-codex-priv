@@ -114,7 +114,7 @@ mod tests {
 pub use audit_chain::{
     CryptographicWitness, // Cryptographic verification
     FrozenChain,          // Phase 2: Immutable record for cryptographic integrity
-    IRLInfo,              // Trust scoring
+    TrustInfo,            // Trust scoring
     InputSnapshot,        // Immutable input data
     OutputSnapshot,       // Immutable output data
     ReasoningChain,       // Phase 1: Mutable process for "thinking out loud"

@@ -29,12 +29,10 @@ impl TrustEvaluation {
 /// Runtime configuration for Sigil MVP
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
-    // Core MVP fields
     pub threshold: f64,
     pub enforcement_mode: EnforcementMode,
     pub telemetry_enabled: bool,
-    
-    // Legacy fields for transition (will be removed when IRL is fully moved to legacy)
+    // Legacy fields kept for backwards compatibility during transition
     pub active_model: Option<String>,
     pub explanation_enabled: bool,
 }
@@ -43,14 +41,12 @@ impl Default for RuntimeConfig {
     fn default() -> Self {
         RuntimeConfig {
             threshold: 0.5,
-            enforcement_mode: EnforcementMode::Active, // Active for MVP
+            enforcement_mode: EnforcementMode::Active,
             telemetry_enabled: false,
-            // Legacy fields
             active_model: None,
             explanation_enabled: false,
         }
     }
 }
 
-// Backwards compatibility type alias for transition period
-pub type IRLConfig = RuntimeConfig;
+
