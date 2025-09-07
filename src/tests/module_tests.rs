@@ -147,13 +147,11 @@ fn test_module_registry_nonexistent_module() {
 
     let error = result.unwrap_err();
     match error {
-        crate::errors::SigilError::Internal { message } => {
-            assert!(
-                message.contains("not found"),
-                "Should be a 'not found' error"
-            );
+        crate::errors::SigilError::NotFound { resource, id } => {
+            assert_eq!(resource, "module");
+            assert_eq!(id, "nonexistent");
         }
-        _ => panic!("Expected Internal error for not found, got: {:?}", error),
+        other => panic!("Expected NotFound for nonexistent module, got: {:?}", other),
     }
 }
 

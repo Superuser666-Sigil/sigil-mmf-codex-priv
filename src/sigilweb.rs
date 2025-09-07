@@ -151,7 +151,7 @@ pub fn add_trust_routes(router: Router, runtime: Arc<RwLock<SigilRuntimeCore>>) 
         .route("/api/canon/user/write", post(canon_user_write))
         .route("/api/canon/system/propose", post(canon_system_propose))
         .route("/api/canon/system/attest", post(canon_system_attest))
-        .route("/api/canon/system/proposal/:id", get(get_proposal_status))
+        .route("/api/canon/system/proposal/{id}", get(get_proposal_status))
         .route("/api/csrf/token", post(mint_csrf_token))
         .layer(Extension(runtime))
         .layer(Extension(rate_limiter))
@@ -550,21 +550,17 @@ async fn run_module(
         module_registry
             .run_module(&module_name, &module_context)
             .map_err(|e| match e {
-                crate::errors::SigilError::Internal { message }
-                    if message.contains("not found") =>
-                {
-                    (
-                        StatusCode::NOT_FOUND,
-                        format!("Module '{}' not found", module_name),
-                    )
-                }
+                crate::errors::SigilError::NotFound { .. } => (
+                    StatusCode::NOT_FOUND,
+                    format!("Module '{}' not found", module_name),
+                ),
                 crate::errors::SigilError::InsufficientLoa { .. } => (
                     StatusCode::FORBIDDEN,
                     format!("Insufficient LOA for module '{}'", module_name),
                 ),
-                _ => (
+                other => (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Module execution failed: {}", e),
+                    format!("Module execution failed: {}", other),
                 ),
             })?
     };
@@ -587,7 +583,7 @@ async fn canon_user_write(
     Extension(csrf_protection): Extension<Arc<CSRFProtection>>,
     headers: HeaderMap,
     Json(req): Json<CanonWriteRequest>,
-) -> Result<Json<CanonWriteResponse>, (StatusCode, String)> {
+) -> Result<Json<CanonWriteResponse>, crate::errors::SigilError> {
     // Rate limiting and CSRF protection
     let client_id = headers
         .get("x-forwarded-for")
@@ -598,33 +594,25 @@ async fn canon_user_write(
     if !rate_limiter
         .check_rate_limit(client_id)
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Rate limit check failed: {e}"),
-            )
-        })?
+        .map_err(|e| crate::errors::SigilError::internal(format!("Rate limit check failed: {e}")))?
     {
-        return Err((
-            StatusCode::TOO_MANY_REQUESTS,
-            "Rate limit exceeded".to_string(),
-        ));
+        return Err(crate::errors::SigilError::RateLimited { message: "Rate limit exceeded".to_string() });
     }
 
     if let Some(csrf_token) = headers.get("x-csrf-token") {
         if let Ok(token) = csrf_token.to_str() {
             if !csrf_protection.validate_token(&req.session_id, token).await {
-                return Err((StatusCode::FORBIDDEN, "Invalid CSRF token".to_string()));
+                return Err(crate::errors::SigilError::auth("Invalid CSRF token"));
             }
         }
     }
 
     // Validate key and value are not empty
     if req.key.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "key cannot be empty".to_string()));
+        return Err(crate::errors::SigilError::validation("key", "cannot be empty"));
     }
     if req.value.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "value cannot be empty".to_string()));
+        return Err(crate::errors::SigilError::validation("value", "cannot be empty"));
     }
 
     // Create audit event for canon write
@@ -639,32 +627,21 @@ async fn canon_user_write(
     // Evaluate trust for canon write
     let recent_requests = rate_limiter.get_request_count(client_id).await;
     let evaluation = {
-        let runtime = runtime.read().map_err(|e| {
-            error!("Runtime read lock poisoned: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "runtime lock poisoned".to_string(),
-            )
-        })?;
+        let runtime = runtime
+            .read()
+            .map_err(|e| crate::errors::SigilError::internal(format!("runtime lock poisoned: {e}")))?;
         runtime.evaluate_event(&event, recent_requests)
     };
 
     if !evaluation.allowed {
-        return Err((
-            StatusCode::FORBIDDEN,
-            "Canon write denied by trust evaluation".to_string(),
-        ));
+        return Err(crate::errors::SigilError::InsufficientLoa { required: LOA::Operator, actual: LOA::Observer });
     }
 
     // Now implement real canon write with signing
     let write_result = {
-        let runtime = runtime.read().map_err(|e| {
-            error!("Runtime read lock poisoned: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "runtime lock poisoned".to_string(),
-            )
-        })?;
+        let runtime = runtime
+            .read()
+            .map_err(|e| crate::errors::SigilError::internal(format!("runtime lock poisoned: {e}")))?;
 
         // Create a CanonicalRecord from the key/value
         let payload = serde_json::json!({
@@ -690,12 +667,9 @@ async fn canon_user_write(
         };
 
         // Canonicalize → hash → sign → persist CanonicalRecord
-        let canonical_json = record.to_canonical_json().map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Canonicalization failed: {e}"),
-            )
-        })?;
+        let canonical_json = record
+            .to_canonical_json()
+            .map_err(|e: String| crate::errors::SigilError::Internal { message: format!("Canonicalization failed: {e}") })?;
 
         // Compute hash
         let mut hasher = sha2::Sha256::new();
@@ -704,12 +678,8 @@ async fn canon_user_write(
         record.hash = hex::encode(digest);
 
         // Sign with active key from KeyStore
-        let signing_key = crate::keys::KeyManager::get_or_create_canon_key().map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to get signing key: {e}"),
-            )
-        })?;
+        let signing_key = crate::keys::KeyManager::get_or_create_canon_key()
+            .map_err(|e| crate::errors::SigilError::internal(format!("Failed to get signing key: {e}")))?;
 
         let (signature, public_key) = signing_key.sign_record(canonical_json.as_bytes());
 
@@ -717,36 +687,22 @@ async fn canon_user_write(
         record.pub_key = Some(public_key);
 
         // Persist to Canon Store
-        let mut canon_store = runtime.canon_store.lock().map_err(|e| {
-            error!("Canon store lock poisoned: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "canon store lock poisoned".to_string(),
-            )
-        })?;
+        let mut canon_store = runtime
+            .canon_store
+            .lock()
+            .map_err(|e| crate::errors::SigilError::internal(format!("canon store lock poisoned: {e}")))?;
 
         canon_store
-            .add_record(record, &LOA::Observer, false)
-            .map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to persist record: {e}"),
-                )
-            })?;
+            .add_record(record, &runtime.loa, false)
+            .map_err(|e| crate::errors::SigilError::canon("add_record", e))?;
 
         Ok::<(), (StatusCode, String)>(())
     };
 
-    match write_result {
-        Ok(()) => {
-            info!("Successfully wrote canon record for key: {}", req.key);
-            Ok(Json(CanonWriteResponse {
-                success: true,
-                error: None,
-            }))
-        }
-        Err(e) => Err(e),
-    }
+    write_result.map_err(|(status, msg)| crate::errors::SigilError::Internal { message: format!("{}: {}", status, msg) }).map(|()| {
+        info!("Successfully wrote canon record for key: {}", req.key);
+        Json(CanonWriteResponse { success: true, error: None })
+    })
 }
 
 #[axum::debug_handler]

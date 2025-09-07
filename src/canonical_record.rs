@@ -56,6 +56,24 @@ pub struct WitnessRecord {
 }
 
 impl CanonicalRecord {
+    /// Minimal constructor for tests
+    pub fn new_minimal_for_test(id: &str, tenant: &str, space: &str, payload: Value) -> Self {
+        Self {
+            kind: "test".to_string(),
+            schema_version: 1,
+            id: id.to_string(),
+            tenant: tenant.to_string(),
+            ts: chrono::Utc::now(),
+            space: space.to_string(),
+            payload,
+            links: vec![],
+            prev: None,
+            hash: String::new(),
+            sig: None,
+            pub_key: None,
+            witnesses: vec![],
+        }
+    }
     /// Construct a canonical record from a FrozenChain.  The caller
     /// provides the tenant and space (e.g., "user" vs "system").  The
     /// `prev` argument links the new record to the previous version

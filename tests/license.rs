@@ -24,7 +24,7 @@ mod tests {
         )
         .unwrap();
         assert!(!result.valid);
-        assert_eq!(result.irl_score, 0.0);
+        assert_eq!(result.trust_score, 0.0);
     }
 
     #[test]
@@ -36,7 +36,7 @@ mod tests {
         )
         .unwrap();
         assert!(!result.valid);
-        assert_eq!(result.irl_score, 0.2);
+        assert_eq!(result.trust_score, 0.2);
     }
 
     #[test]
@@ -48,7 +48,7 @@ mod tests {
         )
         .unwrap();
         assert!(!result.valid);
-        assert_eq!(result.irl_score, 0.4);
+        assert_eq!(result.trust_score, 0.4);
     }
 
     #[test]
@@ -60,7 +60,7 @@ mod tests {
         )
         .unwrap();
         assert!(!result.valid);
-        assert_eq!(result.irl_score, 0.5);
+        assert_eq!(result.trust_score, 0.5);
     }
 
     #[test]

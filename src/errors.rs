@@ -5,6 +5,8 @@
 
 use crate::loa::LOA;
 use thiserror::Error;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 
 /// Main error type for the Sigil Runtime system
 ///
@@ -78,6 +80,12 @@ pub enum SigilError {
 
     #[error("Internal error: {message}")]
     Internal { message: String },
+
+    #[error("Resource not found: {resource} - {id}")]
+    NotFound { resource: String, id: String },
+
+    #[error("Too many requests: {message}")]
+    RateLimited { message: String },
 }
 
 /// Type alias for Result with SigilError
@@ -209,8 +217,9 @@ impl SigilError {
 
     /// Create a not found error
     pub fn not_found(resource: impl Into<String>, id: impl Into<String>) -> Self {
-        Self::Internal {
-            message: format!("{} not found: {}", resource.into(), id.into()),
+        Self::NotFound {
+            resource: resource.into(),
+            id: id.into(),
         }
     }
 
@@ -220,6 +229,31 @@ impl SigilError {
             field: operation.into(),
             message: message.into(),
         }
+    }
+}
+
+impl IntoResponse for SigilError {
+    fn into_response(self) -> Response {
+        let status = match self {
+            SigilError::Config { .. } | SigilError::Serialization { .. } | SigilError::Validation { .. } | SigilError::Crypto { .. } => StatusCode::BAD_REQUEST,
+            SigilError::Auth { .. } => StatusCode::UNAUTHORIZED,
+            SigilError::InsufficientLoa { .. } | SigilError::License { .. } => StatusCode::FORBIDDEN,
+            SigilError::NotFound { .. } => StatusCode::NOT_FOUND,
+            SigilError::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+            SigilError::Network { .. } => StatusCode::BAD_GATEWAY,
+            // Default to 500 for server-side failures
+            SigilError::Database { .. }
+            | SigilError::MutexPoisoned { .. }
+            | SigilError::Io { .. }
+            | SigilError::Canon { .. }
+            | SigilError::Encryption { .. }
+            | SigilError::Audit { .. }
+            | SigilError::Extension { .. }
+            | SigilError::Internal { .. }
+            | SigilError::Irl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (status, self.to_string()).into_response()
     }
 }
 
