@@ -27,6 +27,7 @@ fn test_module_loa_enforcement_operator_success() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = SigilRuntimeCore::new(LOA::Operator, canon_store, config).unwrap();
@@ -80,6 +81,7 @@ fn test_module_loa_enforcement_guest_denied() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = SigilRuntimeCore::new(LOA::Guest, canon_store, config).unwrap();
@@ -128,6 +130,7 @@ fn test_module_registry_nonexistent_module() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = SigilRuntimeCore::new(LOA::Operator, canon_store, config).unwrap();
@@ -169,6 +172,7 @@ fn test_module_registry_builtin_modules() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = SigilRuntimeCore::new(LOA::Root, canon_store, config).unwrap();

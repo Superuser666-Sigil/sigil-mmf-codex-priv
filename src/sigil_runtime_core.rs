@@ -219,6 +219,7 @@ pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> Result<(),
         telemetry_enabled: false,
         active_model: None,
         explanation_enabled: false,
+        model_refresh_from_canon: config.irl.model_refresh_from_canon,
     };
 
     // Use default canon store path, with proper encryption key management
@@ -235,13 +236,18 @@ pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> Result<(),
         .map_err(|e| format!("Invalid LOA format in config: {e}"))?;
 
     // Initialize runtime core with config-based parameters
-    let mut runtime = SigilRuntimeCore::new(session_loa, canon_store, runtime_config)
+    let mut runtime = SigilRuntimeCore::new(session_loa, canon_store, runtime_config.clone())
         .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
 
-    // For MVP: Use config-only threshold to avoid half-doing both config and canon
-    // Note: model_refresh_from_canon flag will be added to config in future version
-    runtime.threshold = config.irl.threshold;
-    println!("Using config-only threshold: {:.2}", runtime.threshold);
+    // Use single model/threshold source based on config flag
+    if runtime_config.model_refresh_from_canon {
+        // Refresh from Canon records
+        runtime.refresh_models().map_err(|e| format!("Failed to refresh models from canon: {e}"))?;
+        println!("Using canon-based threshold: {:.2}", runtime.threshold);
+    } else {
+        // Use config-based threshold (already set in runtime_config)
+        println!("Using config-based threshold: {:.2}", runtime.threshold);
+    }
 
     // Start the runtime session
     println!("🚀 Sigil runtime session started");

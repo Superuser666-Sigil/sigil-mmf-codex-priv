@@ -17,11 +17,11 @@ This repository contains the `mmf_sigil` Rust crate - a production-focused runti
 - **CSRF Protection**: Token-based protection with configurable expiration
 - **Rate Limiting**: Configurable request throttling per client
 
-### ✅ **Audit & Trust System**
-- **ReasoningChain → FrozenChain**: Two-phase audit system with mutable reasoning followed by immutable cryptographic records
-- **Trust Evaluation Model**: Logistic regression model with 5 features (action risk, target risk, LOA, rate limiting, input entropy)
-- **Witness Registry**: Trusted public key management for signature validation
-- **Secure Audit Chain**: Cryptographically linked audit records with Ed25519 signatures
+### ✅ **Trust Evaluation System**
+- **Logistic Trust Model**: 5-feature trust evaluation (action risk, target risk, LOA level, rate limiting, input entropy)
+- **Trust Features**: Risk-based scoring for actions, targets, and user behavior
+- **Enforcement Modes**: Passive, Active, and Strict enforcement levels
+- **Default-Deny Security**: All operations fail closed on missing permissions
 
 ### ✅ **HTTP API (Web Interface)**
 - **Trust Evaluation**: `POST /api/trust/check` - Evaluate request trustworthiness
@@ -29,19 +29,30 @@ This repository contains the `mmf_sigil` Rust crate - a production-focused runti
 - **Canon Operations**: `POST /api/canon/user/write` - Write canonical records with full cryptographic signing
 - **System Proposals**: `POST /api/canon/system/propose` - Create quorum proposals for system changes
 - **System Attestation**: `POST /api/canon/system/attest` - Submit witness signatures for proposals
+- **Proposal Status**: `GET /api/canon/system/proposal/{id}` - Query proposal status and signatures
 - **Module Execution**: `POST /api/module/{name}/run` - Execute LOA-gated modules
+- **Extension Registration**: `POST /api/extensions/register` - Register extension modules
 - **CSRF Token Minting**: `POST /api/csrf/token` - Generate CSRF protection tokens
 - **Health Checks**: `/healthz`, `/readyz`, `/metrics` - Operational status endpoints
+- **Versioned Endpoints**: `/v1/trust/check`, `/v1/trust/status` - API versioning support
 
 ### ✅ **CLI Tools**
 - **Runtime Execution**: `cargo run` - Start the main runtime with license validation
 - **Web Server**: `cargo run serve --host 0.0.0.0 --port 8080` - HTTP API server
 - **Canon Validation**: `cargo run validate --file canon_store` - Validate encrypted canon store
+- **Canon Operations**: `cargo run diff --id <id>`, `cargo run revert --id <id> --to-hash <hash>` - Canon management
 - **Key Management**: `cargo run generate-key --key-id <id>` - Generate Ed25519 keypairs
 - **Digital Signing**: `cargo run sign --key-id <id> --data <data>` - Sign data with stored keys
 - **Signature Verification**: `cargo run verify --key-id <id> --data <data> --signature <sig>` - Verify signatures
 - **License Generation**: `cargo run generate-license` - Create signed license files
 - **LOA Identity**: `cargo run whoami` - Display current access level
+- **Extension Management**: `cargo run register-extension --name <name> --loa <level>` - Register extensions
+
+### ✅ **Audit & Trust System**
+- **ReasoningChain → FrozenChain**: Two-phase audit system with mutable reasoning followed by immutable cryptographic records
+- **Audit Chain Integrity**: Cryptographically linked audit records with Ed25519 signatures
+- **Witness Registry**: Trusted public key management for signature validation
+- **Secure Audit Chain**: Tamper-evident audit trails with signature verification
 
 ### ✅ **Configuration & License System**
 - **TOML Configuration**: Environment and file-based configuration with secure defaults
@@ -57,14 +68,14 @@ All persistent data uses the `CanonicalRecord` schema for cryptographic integrit
 
 ```json
 {
-  "kind": "user_data | system_config | audit_record",
+  "kind": "user_data | system_config | audit_record | frozen_chain | reasoning_chain",
   "schema_version": 1,
   "id": "unique_identifier",
   "tenant": "user | system",
   "ts": "2024-01-01T00:00:00Z",
   "space": "user | system",
   "payload": { "application_specific_data": "..." },
-  "links": [{ "rel": "parent", "id": "linked_record_id" }],
+  "links": [{ "label": "parent", "target": "linked_record_id" }],
   "prev": "previous_record_hash_or_null",
   "hash": "sha256_of_canonical_json",
   "sig": "ed25519_signature_base64",
@@ -98,7 +109,7 @@ git clone <repository>
 cd sigil-mmf-codex-priv
 cargo build --release
 
-# Run tests (86 tests covering all components)
+# Run tests (120+ tests covering all components)
 cargo test
 
 # Generate documentation
@@ -134,7 +145,7 @@ cargo run validate --file canon_store
 # Query canonical records (requires proper LOA)
 curl -X POST http://localhost:8080/api/trust/check \
   -H "Content-Type: application/json" \
-  -d '{"action": "read", "target": "user_profile"}'
+  -d '{"action": "read", "target": "user_profile", "session_id": "test", "loa": "Observer"}'
 ```
 
 ---
@@ -175,9 +186,16 @@ curl -X POST http://localhost:8080/api/trust/check \
 4. **Mentor**: Witness signatures, elevated operations
 5. **Root**: System administration, all privileges
 
+### **Trust Evaluation Features**
+- **Action Risk**: 0.0-1.0 risk level based on action type (read=0.1, write=0.6, admin=0.95)
+- **Target Risk**: 0.0-1.0 sensitivity based on target resource (user=0.3, system=0.9)
+- **LOA Level**: 0.0-1.0 normalized privilege level (Guest=0.0, Root=1.0)
+- **Rate Limiting**: 0.0-1.0 recent request frequency normalization
+- **Input Entropy**: 0.0-1.0 complexity measure of input data
+
 ### **Cryptographic Guarantees**
 - **Ed25519 Signatures**: All canon records cryptographically signed
-- **Witness Quorum**: System operations require Root + 3 Mentors
+- **Witness Quorum**: System operations require k-of-n witness signatures
 - **Encryption at Rest**: AES-GCM with secure key derivation
 - **Canonical JSON**: RFC 8785 compliance for signature stability
 - **Audit Immutability**: ReasoningChain → FrozenChain prevents tampering
@@ -192,21 +210,25 @@ curl -X POST http://localhost:8080/api/trust/check \
 
 ## 📈 **Testing & Verification**
 
-**86 comprehensive tests covering:**
-- ✅ Ed25519 key generation, signing, and verification
-- ✅ Encrypted canon store operations with proper LOA enforcement
-- ✅ Quorum proposal creation and witness signature collection
-- ✅ JSON canonicalization RFC 8785 compliance
-- ✅ Trust model evaluation with risk differentiation
-- ✅ Module execution with LOA gating
-- ✅ CSRF token generation and validation
-- ✅ Rate limiting across multiple clients
-- ✅ Audit chain integrity and tamper detection
-- ✅ Complete canon write/verify round-trip with witnesses
+**120+ comprehensive tests covering:**
+- ✅ Ed25519 key generation, signing, and verification (15 tests)
+- ✅ Encrypted canon store operations with proper LOA enforcement (8 tests)
+- ✅ Quorum proposal creation and witness signature collection (4 tests)
+- ✅ JSON canonicalization RFC 8785 compliance (15 tests)
+- ✅ Trust model evaluation with risk differentiation (3 tests)
+- ✅ Module execution with LOA gating (8 tests)
+- ✅ CSRF token generation and validation (5 tests)
+- ✅ Rate limiting across multiple clients (3 tests)
+- ✅ Audit chain integrity and tamper detection (6 tests)
+- ✅ Complete canon write/verify round-trip with witnesses (1 test)
+- ✅ End-to-end integration tests (13 tests)
+- ✅ License validation and scoring (7 tests)
+- ✅ Canon signer integration (3 tests)
+- ✅ JCS conformance testing (1 test)
 
 **Test Coverage:**
 ```bash
-cargo test --lib  # Runs all 86 tests
+cargo test --workspace --all-features  # Runs all 120+ tests
 cargo test --lib test_canon_write_verify_round_trip_with_quorum -- --nocapture  # See full workflow
 ```
 
@@ -218,9 +240,12 @@ cargo test --lib test_canon_write_verify_round_trip_with_quorum -- --nocapture  
 ```bash
 MMF_LICENSE_SECRET="your_license_secret"
 MMF_DB_BACKEND="sled"  # Default encrypted storage
-MMF_IRL_THRESHOLD="0.4"  # Trust evaluation threshold (legacy)
-MMF_IRL_ENFORCEMENT_MODE="active"  # active | strict | passive (legacy)
+MMF_IRL_THRESHOLD="0.4"  # Trust evaluation threshold
+MMF_IRL_ENFORCEMENT_MODE="active"  # active | strict | passive
+MMF_IRL_MODEL_REFRESH_FROM_CANON="false"  # Use canon vs config for model refresh
 MMF_TRUST_DEFAULT_LOA="Observer"  # Default access level
+MMF_TRUST_ALLOW_OPERATOR_CANON_WRITE="false"  # Allow operator canon writes
+MMF_TRUST_ALLOW_ADMIN_EXPORT="false"  # Allow admin exports
 RUST_LOG="info,mmf_sigil=debug"  # Logging configuration
 ```
 
@@ -232,7 +257,9 @@ db_backend = "sled"
 [irl]
 enforcement_mode = "active"
 threshold = 0.4
-# IRL features deprecated - using logistic trust model
+telemetry_enabled = false
+explanation_enabled = false
+model_refresh_from_canon = false
 
 [trust]
 default_loa = "Observer"

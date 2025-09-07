@@ -41,6 +41,7 @@ async fn create_test_runtime(loa: LOA) -> (Arc<RwLock<SigilRuntimeCore>>, TempDi
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = Arc::new(RwLock::new(

@@ -105,6 +105,7 @@ fn test_comprehensive_loa_enforcement() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = SigilRuntimeCore::new(LOA::Root, canon_store, config).unwrap();
@@ -218,6 +219,7 @@ fn test_module_error_handling() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = SigilRuntimeCore::new(LOA::Root, canon_store, config).unwrap();
@@ -286,6 +288,7 @@ fn test_module_registry_management() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = SigilRuntimeCore::new(LOA::Root, canon_store, config).unwrap();
@@ -346,6 +349,7 @@ fn test_module_context_validation() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = SigilRuntimeCore::new(LOA::Root, canon_store, config).unwrap();
@@ -402,6 +406,7 @@ fn test_module_isolation() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = SigilRuntimeCore::new(LOA::Root, canon_store, config).unwrap();

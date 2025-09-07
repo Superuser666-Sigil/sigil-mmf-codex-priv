@@ -13,7 +13,7 @@ fn jcs_basic_key_order_and_numbers() {
         "unicode": "\u{00E9}",
     });
 
-    let mut record = CanonicalRecord {
+    let record = CanonicalRecord {
         kind: "test".into(),
         schema_version: 1,
         id: "jcs1".into(),

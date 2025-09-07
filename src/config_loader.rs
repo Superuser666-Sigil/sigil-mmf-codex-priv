@@ -5,6 +5,9 @@ pub struct RuntimeTrustConfig {
     pub threshold: f64,
     pub telemetry_enabled: bool,
     pub explanation_enabled: bool,
+    /// Whether to refresh model/threshold from Canon records instead of config
+    #[serde(default)]
+    pub model_refresh_from_canon: bool,
 }
 
 impl Default for RuntimeTrustConfig {
@@ -15,6 +18,7 @@ impl Default for RuntimeTrustConfig {
             threshold: 0.4,
             telemetry_enabled: false,
             explanation_enabled: false,
+            model_refresh_from_canon: false, // Default to config-based refresh for backwards compatibility
         }
     }
 }

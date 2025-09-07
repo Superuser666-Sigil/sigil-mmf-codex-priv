@@ -333,6 +333,7 @@ pub fn dispatch(cli: Cli) {
                         enforcement_mode,
                         telemetry_enabled: false,
                         explanation_enabled: false,
+                        model_refresh_from_canon: app_cfg.irl.model_refresh_from_canon,
                     };
 
                     // Use encrypted Sled backend with proper key management

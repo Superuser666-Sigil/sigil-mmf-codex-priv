@@ -33,6 +33,8 @@ pub struct RuntimeConfig {
     // Legacy fields kept for backwards compatibility during transition
     pub active_model: Option<String>,
     pub explanation_enabled: bool,
+    /// Whether to refresh model/threshold from Canon records instead of config
+    pub model_refresh_from_canon: bool,
 }
 
 impl Default for RuntimeConfig {
@@ -43,6 +45,7 @@ impl Default for RuntimeConfig {
             telemetry_enabled: false,
             active_model: None,
             explanation_enabled: false,
+            model_refresh_from_canon: false, // Default to config-based refresh for backwards compatibility
         }
     }
 }

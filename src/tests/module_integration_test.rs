@@ -33,6 +33,7 @@ async fn create_test_app(loa: LOA) -> Router {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = Arc::new(RwLock::new(

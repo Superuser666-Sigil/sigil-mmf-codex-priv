@@ -39,6 +39,7 @@ fn test_interactive_quorum_workflow_full_cycle() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime = SigilRuntimeCore::new(LOA::Root, canon_store.clone(), config)
@@ -370,6 +371,7 @@ fn test_proposal_status_tracking() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime =
@@ -501,6 +503,7 @@ fn test_partial_quorum_failure_scenarios() {
         active_model: None,
         telemetry_enabled: false,
         explanation_enabled: false,
+        model_refresh_from_canon: false,
     };
 
     let runtime =
