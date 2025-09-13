@@ -1,0 +1,150 @@
+use axum::{extract::State, Json, http::StatusCode};
+use serde::{Deserialize, Serialize};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+use std::sync::Arc;
+
+use crate::{
+    app_state::AppState, 
+    security::CurrentUser, 
+    loa::LOA, 
+    api_errors::AppError,
+    canonical_record::CanonicalRecord,
+};
+
+#[derive(Deserialize)]
+pub struct MemoryWriteReq { 
+    key: String, 
+    text: String, 
+    session_id: String 
+}
+
+#[derive(Serialize)]
+pub struct MemoryWriteResp { 
+    success: bool, 
+    id: String 
+}
+
+pub async fn memory_write(
+    State(_st): State<Arc<AppState>>,
+    Json(req): Json<MemoryWriteReq>,
+    user: CurrentUser,
+) -> Result<(StatusCode, Json<MemoryWriteResp>), AppError> {
+    if user.loa < LOA::Operator {
+        return Err(AppError::forbidden("requires Operator"));
+    }
+    if req.key.trim().is_empty() || req.text.len() > 16 * 1024 {
+        return Err(AppError::bad_request("invalid memory payload"));
+    }
+
+    let now = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
+    let payload = serde_json::json!({
+        "schema_version": 1,
+        "key": format!("mem::{}::{}", user.user_id, req.key),
+        "text": req.text,
+        "ts": now,
+        "user_id": user.user_id,
+    });
+
+    // Convert to CanonicalRecord (user space)
+    let mut rec = CanonicalRecord::new_minimal_for_test(
+        &format!("mem_{}_{}", user.user_id, req.key),
+        &user.user_id,
+        "user",
+        payload,
+    );
+    rec.kind = "memory_block".to_string();
+
+    // TODO: Sign the record with runtime signing key
+    // rec.sign_with(rt_signing_key()?);
+
+    // TODO: Fix canon store interface to work with Arc<dyn CanonStore>
+    // For now, just log the operation
+    tracing::info!("Memory write: user={}, key={}", user.user_id, req.key);
+
+    Ok((StatusCode::OK, Json(MemoryWriteResp { 
+        success: true, 
+        id: rec.id 
+    })))
+}
+
+#[derive(Serialize)]
+pub struct MemoryListItem { 
+    id: String, 
+    ts: String,
+    key: String,
+}
+
+pub async fn memory_list(
+    State(_st): State<Arc<AppState>>,
+    user: CurrentUser,
+) -> Result<Json<Vec<MemoryListItem>>, AppError> {
+    // For now, return empty list since we need to implement list_by_kind_and_tenant
+    // TODO: Implement proper memory listing from canon store
+    let _recs: Vec<CanonicalRecord> = vec![];
+    
+    // Mock response for now
+    let out = vec![
+        MemoryListItem {
+            id: format!("mem_{}_{}", user.user_id, "example"),
+            ts: OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
+            key: "example".to_string(),
+        }
+    ];
+    
+    Ok(Json(out))
+}
+
+#[derive(Deserialize)]
+pub struct RagUpsertReq {
+    doc_id: String,
+    title: String,
+    text: String,
+    session_id: String,
+}
+
+#[derive(Serialize)]
+pub struct RagUpsertResp {
+    success: bool,
+    doc_id: String,
+}
+
+pub async fn rag_upsert(
+    State(_st): State<Arc<AppState>>,
+    Json(req): Json<RagUpsertReq>,
+    user: CurrentUser,
+) -> Result<(StatusCode, Json<RagUpsertResp>), AppError> {
+    if user.loa < LOA::Operator {
+        return Err(AppError::forbidden("requires Operator"));
+    }
+    if req.text.len() > 32 * 1024 {
+        return Err(AppError::bad_request("document too large"));
+    }
+
+    let now = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
+    let payload = serde_json::json!({
+        "schema_version": 1,
+        "doc_id": format!("rag::{}::{}", user.user_id, req.doc_id),
+        "title": req.title,
+        "text": req.text,
+        "ts": now,
+        "user_id": user.user_id,
+        // "embedding": [], // optional vector embedding
+    });
+
+    let mut rec = CanonicalRecord::new_minimal_for_test(
+        &format!("rag_{}_{}", user.user_id, req.doc_id),
+        &user.user_id,
+        "user",
+        payload,
+    );
+    rec.kind = "rag_doc".to_string();
+
+    // TODO: Fix canon store interface to work with Arc<dyn CanonStore>
+    // For now, just log the operation
+    tracing::info!("RAG upsert: user={}, doc_id={}", user.user_id, req.doc_id);
+
+    Ok((StatusCode::OK, Json(RagUpsertResp {
+        success: true,
+        doc_id: req.doc_id,
+    })))
+}

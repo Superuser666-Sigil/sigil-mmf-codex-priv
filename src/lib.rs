@@ -4,6 +4,18 @@
 // Core error handling
 pub mod errors;
 
+// Cryptographic utilities
+pub mod crypto;
+
+// API infrastructure
+pub mod api_errors;
+pub mod security;
+pub mod app_state;
+pub mod api;
+
+// Module system
+pub mod module;
+
 // Canonical state management
 pub mod canon_diff_chain;
 pub mod canon_guard;
@@ -53,6 +65,7 @@ pub mod sigilctl;
 
 // Web server interface
 pub mod sigilweb;
+pub mod enhanced_web;
 
 // Backup & recovery
 pub mod backup_recovery;
