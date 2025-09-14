@@ -74,6 +74,51 @@ impl CanonicalRecord {
             witnesses: vec![],
         }
     }
+
+    /// Create a new signed CanonicalRecord with proper canonicalization and signing
+    pub fn new_signed(
+        kind: &str,
+        id: &str,
+        tenant: &str,
+        space: &str,
+        payload: Value,
+        prev: Option<String>,
+    ) -> Result<Self, String> {
+        let mut record = Self {
+            kind: kind.to_string(),
+            schema_version: 1,
+            id: id.to_string(),
+            tenant: tenant.to_string(),
+            ts: chrono::Utc::now(),
+            space: space.to_string(),
+            payload,
+            links: vec![],
+            prev,
+            hash: String::new(), // Will be computed
+            sig: None,           // Will be signed
+            pub_key: None,       // Will be set from key store
+            witnesses: vec![],
+        };
+
+        // Canonicalize → hash → sign
+        let canonical_json = record.to_canonical_json()?;
+
+        // Compute hash
+        let mut hasher = Sha256::new();
+        hasher.update(canonical_json.as_bytes());
+        let digest = hasher.finalize();
+        record.hash = hex::encode(digest);
+
+        // Sign with active key from KeyStore
+        let signing_key = crate::keys::KeyManager::get_or_create_canon_key()
+            .map_err(|e| format!("Failed to get signing key: {e}"))?;
+
+        let (signature, public_key) = signing_key.sign_record(canonical_json.as_bytes());
+        record.sig = Some(signature);
+        record.pub_key = Some(public_key);
+
+        Ok(record)
+    }
     /// Construct a canonical record from a FrozenChain.  The caller
     /// provides the tenant and space (e.g., "user" vs "system").  The
     /// `prev` argument links the new record to the previous version

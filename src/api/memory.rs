@@ -45,21 +45,24 @@ pub async fn memory_write(
         "user_id": user.user_id,
     });
 
-    // Convert to CanonicalRecord (user space)
-    let mut rec = CanonicalRecord::new_minimal_for_test(
-        &format!("mem_{}_{}", user.user_id, req.key),
+    // Create properly signed CanonicalRecord
+    let record_id = format!("mem_{}_{}", user.user_id, req.key);
+    let rec = CanonicalRecord::new_signed(
+        "memory_block",
+        &record_id,
         &user.user_id,
         "user",
         payload,
-    );
-    rec.kind = "memory_block".to_string();
+        None,
+    ).map_err(|e| AppError::internal(format!("Failed to create signed record: {e}")))?;
 
-    // TODO: Sign the record with runtime signing key
-    // rec.sign_with(rt_signing_key()?);
+    // Persist to Canon Store
+    let mut canon_store = _st.canon_store.lock().map_err(|e| AppError::internal(format!("canon store lock poisoned: {e}")))?;
+    canon_store
+        .add_record(rec.clone(), &user.loa, false)
+        .map_err(|e| AppError::internal(format!("Failed to add record: {e}")))?;
 
-    // TODO: Fix canon store interface to work with Arc<dyn CanonStore>
-    // For now, just log the operation
-    tracing::info!("Memory write: user={}, key={}", user.user_id, req.key);
+    tracing::info!("Memory write: user={}, key={}, record_id={}", user.user_id, req.key, record_id);
 
     Ok((StatusCode::OK, Json(MemoryWriteResp { 
         success: true, 
@@ -131,17 +134,24 @@ pub async fn rag_upsert(
         // "embedding": [], // optional vector embedding
     });
 
-    let mut rec = CanonicalRecord::new_minimal_for_test(
-        &format!("rag_{}_{}", user.user_id, req.doc_id),
+    // Create properly signed CanonicalRecord
+    let record_id = format!("rag_{}_{}", user.user_id, req.doc_id);
+    let rec = CanonicalRecord::new_signed(
+        "rag_doc",
+        &record_id,
         &user.user_id,
         "user",
         payload,
-    );
-    rec.kind = "rag_doc".to_string();
+        None,
+    ).map_err(|e| AppError::internal(format!("Failed to create signed record: {e}")))?;
 
-    // TODO: Fix canon store interface to work with Arc<dyn CanonStore>
-    // For now, just log the operation
-    tracing::info!("RAG upsert: user={}, doc_id={}", user.user_id, req.doc_id);
+    // Persist to Canon Store
+    let mut canon_store = _st.canon_store.lock().map_err(|e| AppError::internal(format!("canon store lock poisoned: {e}")))?;
+    canon_store
+        .add_record(rec.clone(), &user.loa, false)
+        .map_err(|e| AppError::internal(format!("Failed to add record: {e}")))?;
+
+    tracing::info!("RAG upsert: user={}, doc_id={}, record_id={}", user.user_id, req.doc_id, record_id);
 
     Ok((StatusCode::OK, Json(RagUpsertResp {
         success: true,

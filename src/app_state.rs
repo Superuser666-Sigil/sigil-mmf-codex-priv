@@ -58,18 +58,26 @@ impl AppState {
     pub fn rebuild_canonical_record_from_proposal(&self, prop: &SystemProposal)
         -> anyhow::Result<CanonicalRecord>
     {
-        // parse canonical JSON payload -> CanonicalRecord
-        // For now, create a minimal record from the proposal content
-        let record = CanonicalRecord::new_minimal_for_test(
+        // Create properly signed CanonicalRecord from proposal
+        let payload = serde_json::json!({
+            "entry": prop.entry,
+            "content": prop.content,
+            "content_hash": prop.content_hash,
+            "required_k": prop.required_k,
+            "signers": prop.signers,
+            "created_at": prop.created_at,
+            "expires_at": prop.expires_at,
+        });
+
+        let record = CanonicalRecord::new_signed(
+            "system_proposal",
             &prop.id,
             "system",
             "system",
-            serde_json::json!({
-                "entry": prop.entry,
-                "content": prop.content,
-                "content_hash": prop.content_hash,
-            })
-        );
+            payload,
+            None,
+        ).map_err(|e| anyhow::anyhow!("Failed to create signed record: {e}"))?;
+
         Ok(record)
     }
 
