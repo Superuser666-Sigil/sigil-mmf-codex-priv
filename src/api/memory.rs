@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::{
     app_state::AppState, 
-    security::CurrentUser, 
+    security::{CurrentUser, extract_current_user_from_headers}, 
     loa::LOA, 
     api_errors::AppError,
     canonical_record::CanonicalRecord,
@@ -15,6 +15,7 @@ use crate::{
 pub struct MemoryWriteReq { 
     key: String, 
     text: String, 
+    #[allow(dead_code)]
     session_id: String 
 }
 
@@ -26,9 +27,10 @@ pub struct MemoryWriteResp {
 
 pub async fn memory_write(
     State(_st): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<MemoryWriteReq>,
-    user: CurrentUser,
 ) -> Result<(StatusCode, Json<MemoryWriteResp>), AppError> {
+    let user: CurrentUser = extract_current_user_from_headers(&headers)?;
     if user.loa < LOA::Operator {
         return Err(AppError::forbidden("requires Operator"));
     }
@@ -79,8 +81,9 @@ pub struct MemoryListItem {
 
 pub async fn memory_list(
     State(_st): State<Arc<AppState>>,
-    user: CurrentUser,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<MemoryListItem>>, AppError> {
+    let user: CurrentUser = extract_current_user_from_headers(&headers)?;
     // For now, return empty list since we need to implement list_by_kind_and_tenant
     // TODO: Implement proper memory listing from canon store
     let _recs: Vec<CanonicalRecord> = vec![];
@@ -102,6 +105,7 @@ pub struct RagUpsertReq {
     doc_id: String,
     title: String,
     text: String,
+    #[allow(dead_code)]
     session_id: String,
 }
 
@@ -113,9 +117,10 @@ pub struct RagUpsertResp {
 
 pub async fn rag_upsert(
     State(_st): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<RagUpsertReq>,
-    user: CurrentUser,
 ) -> Result<(StatusCode, Json<RagUpsertResp>), AppError> {
+    let user: CurrentUser = extract_current_user_from_headers(&headers)?;
     if user.loa < LOA::Operator {
         return Err(AppError::forbidden("requires Operator"));
     }

@@ -8,7 +8,7 @@ use crate::{
         quorum::commit_system_proposal,
         memory::{memory_write, memory_list, rag_upsert},
     },
-    sigilweb::build_trust_router,
+    // sigilweb::build_trust_router, // unused here; kept exported elsewhere
 };
 
 /// Build a comprehensive router with all API endpoints
@@ -53,14 +53,8 @@ async fn run_rust_mentor_module(
     
     // Run the module
     match module.run(req.input, &req.session_id, &req.user_id, &*runtime).await {
-        Ok(output) => Ok(axum::Json(crate::sigilweb::ModuleRunResponse {
-            output,
-            error: None,
-        })),
-        Err(e) => Ok(axum::Json(crate::sigilweb::ModuleRunResponse {
-            output: String::new(),
-            error: Some(e.to_string()),
-        })),
+        Ok(output) => Ok(axum::Json(crate::sigilweb::ModuleRunResponse::from_output(output))),
+        Err(e) => Ok(axum::Json(crate::sigilweb::ModuleRunResponse::from_error(e.to_string()))),
     }
 }
 

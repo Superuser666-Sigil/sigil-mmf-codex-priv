@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{
     api_errors::AppError, 
     app_state::AppState, 
-    security::CurrentUser, 
+    security::{CurrentUser, extract_current_user_from_headers}, 
     loa::LOA,
 };
 
@@ -22,9 +22,10 @@ pub struct CommitResponse {
 
 pub async fn commit_system_proposal(
     State(st): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<CommitRequest>,
-    user: CurrentUser,
 ) -> Result<(StatusCode, Json<CommitResponse>), AppError> {
+    let user: CurrentUser = extract_current_user_from_headers(&headers)?;
     if user.loa != LOA::Root {
         return Err(AppError::forbidden("only root can commit proposals"));
     }

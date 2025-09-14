@@ -9,7 +9,7 @@ use std::{sync::Arc, path::PathBuf};
 
 use crate::{
     api_errors::AppError,
-    security::CurrentUser,
+    security::{CurrentUser, extract_current_user_from_headers},
     app_state::AppState,
     loa::LOA,
 };
@@ -50,9 +50,10 @@ pub struct CreateLicenseResponse {
 #[axum::debug_handler]
 pub async fn create_license_root_only(
     State(st): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<CreateLicenseRequest>,
-    user: CurrentUser, // injected by auth middleware
 ) -> Result<(StatusCode, Json<CreateLicenseResponse>), AppError> {
+    let user: CurrentUser = extract_current_user_from_headers(&headers)?;
     if user.loa != LOA::Root {
         return Err(AppError::forbidden("only root can create licenses"));
     }

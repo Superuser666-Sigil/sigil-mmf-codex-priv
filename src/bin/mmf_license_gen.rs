@@ -1,7 +1,7 @@
 use clap::Parser;
 use serde::Serialize;
 use sha2::{Sha256, Digest};
-use ed25519_dalek::{SigningKey, Signer};
+use ed25519_dalek::Signer;
 use base64::Engine as _; 
 use base64::engine::general_purpose::STANDARD as b64;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};

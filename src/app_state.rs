@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 
 use crate::{
@@ -17,7 +17,7 @@ pub struct AppState {
     pub license_passphrase: Option<String>,
 
     pub quorum: RwLock<QuorumSystem>,
-    pub canon_store: Arc<dyn CanonStore>,
+    pub canon_store: Arc<Mutex<dyn CanonStore>>,
     pub runtime_core: Arc<RwLock<SigilRuntimeCore>>,
     pub key_store: KeyStore,
 }
@@ -30,7 +30,7 @@ impl AppState {
         license_dir: String,
         license_passphrase: Option<String>,
         quorum: QuorumSystem,
-        canon_store: Arc<dyn CanonStore>,
+        canon_store: Arc<Mutex<dyn CanonStore>>,
         runtime_core: Arc<RwLock<SigilRuntimeCore>>,
     ) -> Self {
         let key_store = KeyStore::new(&key_dir);

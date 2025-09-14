@@ -64,6 +64,15 @@ pub struct ModuleRunResponse {
     error: Option<String>,
 }
 
+impl ModuleRunResponse {
+    pub fn from_output(output: String) -> Self {
+        Self { output, error: None }
+    }
+    pub fn from_error(error: String) -> Self {
+        Self { output: String::new(), error: Some(error) }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CanonWriteRequest {
     key: String,

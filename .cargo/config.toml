@@ -1,0 +1,7 @@
+[build]
+# Use host default; do not force windows-gnu. This avoids ring/rustls breakage.
+# target = "x86_64-pc-windows-msvc"
+
+[target.x86_64-pc-windows-msvc]
+# No custom linker; rely on MSVC's link.exe via VS Build Tools.
+

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use regex::Regex;
 use reqwest::Client;
-use syn::{File as SynFile, visit::Visit};
+use syn::File as SynFile;
 use once_cell::sync::Lazy;
 
 use crate::{
