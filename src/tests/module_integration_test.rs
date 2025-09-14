@@ -11,7 +11,8 @@ use axum::http::StatusCode;
 use std::sync::{Arc, RwLock};
 use tower::ServiceExt;
 
-use crate::canon_store_sled::CanonStoreSled;
+use crate::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
+use crate::keys::KeyManager;
 use crate::loa::LOA;
 use crate::runtime_config::{EnforcementMode, RuntimeConfig};
 use crate::sigil_runtime_core::SigilRuntimeCore;
@@ -22,8 +23,9 @@ use tempfile::TempDir;
 async fn create_test_app(loa: LOA) -> Router {
     // Create a temporary canon store
     let temp_dir = TempDir::new().unwrap();
+    let encryption_key = KeyManager::get_encryption_key().unwrap();
     let canon_store = Arc::new(Mutex::new(
-        CanonStoreSled::new(temp_dir.path().to_str().unwrap()).unwrap(),
+        EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));
 
     // Create runtime with specified LOA

@@ -1,6 +1,7 @@
 // tests/canon_store.rs
 use crate::canon_store::CanonStore;
-use crate::canon_store_sled::CanonStoreSled;
+use crate::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
+use crate::keys::KeyManager;
 use crate::canonical_record::CanonicalRecord;
 use crate::loa::LOA;
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
@@ -15,7 +16,9 @@ pub fn write_and_read_entry_roundtrip() {
         .to_str()
         .expect("temp path should be valid UTF-8");
 
-    let mut store = CanonStoreSled::new(path).expect("should be able to create CanonStoreSled");
+    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let mut store = EncryptedCanonStoreSled::new(path, &encryption_key)
+        .expect("should be able to create encrypted CanonStore");
     let id = "unit_test_doc";
 
     let entry = TrustedKnowledgeEntry {
@@ -53,7 +56,9 @@ pub fn reject_read_without_permission() {
         .to_str()
         .expect("temp path should be valid UTF-8");
 
-    let mut store = CanonStoreSled::new(path).expect("should be able to create CanonStoreSled");
+    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let mut store = EncryptedCanonStoreSled::new(path, &encryption_key)
+        .expect("should be able to create encrypted CanonStore");
 
     let entry = TrustedKnowledgeEntry {
         id: "restricted".to_string(),

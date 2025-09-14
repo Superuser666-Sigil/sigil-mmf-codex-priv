@@ -84,16 +84,91 @@ pub fn validate_license(
 ) -> Result<LicenseValidationResult, String> {
     let content = fs::read_to_string(Path::new(path))
         .map_err(|e| format!("Failed to read license file: {e}"))?;
+    validate_license_content(&content, expected_runtime, expected_fingerprint)
+}
 
+/// Validate license TOML content from a string. Supports both legacy [license.trust]
+/// and new sealed format with top-level [license] + [seal].
+pub fn validate_license_content(
+    content: &str,
+    expected_runtime: &str,
+    expected_fingerprint: &str,
+) -> Result<LicenseValidationResult, String> {
     #[derive(Deserialize)]
     struct LicenseWrapper {
         license: SigilLicense,
     }
 
-    let wrapper: LicenseWrapper =
-        toml::from_str(&content).map_err(|e| format!("Deserialize error: {e}"))?;
+    // Try legacy/compat format first
+    let parsed_legacy: Result<LicenseWrapper, toml::de::Error> = toml::from_str(content);
 
-    let license = wrapper.license;
+    let mut license: SigilLicense;
+    if let Ok(wrapper) = parsed_legacy {
+        license = wrapper.license;
+    } else {
+        // Try sealed format: { license: Simple, seal: Seal }
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct SimpleLicense {
+            pub id: Option<String>,
+            pub issued_at: DateTime<Utc>,
+            pub expires_at: DateTime<Utc>,
+            pub loa: LOA,
+            pub owner: LicenseOwner,
+            pub bindings: LicenseBindings,
+        }
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct Seal {
+            pub alg: String,
+            pub sig: String,
+            pub pubkey: String,
+            #[serde(rename = "contentHash")]
+            pub content_hash: String,
+        }
+        #[derive(Deserialize)]
+        struct SealedFile {
+            license: SimpleLicense,
+            seal: Seal,
+        }
+
+        let sealed: SealedFile = toml::from_str(content)
+            .map_err(|e| format!("Deserialize error: {e}"))?;
+
+        // Map SimpleLicense + seal into SigilLicense shape for validation output
+        let permissions = LicensePermissions {
+            can_mutate_canon: matches!(sealed.license.loa, LOA::Root | LOA::Mentor),
+            can_override_audit: matches!(sealed.license.loa, LOA::Root),
+            can_register_module: matches!(
+                sealed.license.loa,
+                LOA::Root | LOA::Mentor | LOA::Operator
+            ),
+            can_elevate_identity: matches!(sealed.license.loa, LOA::Root | LOA::Mentor),
+        };
+        let trust = LicenseTrust {
+            trust_model: format!("sealed_{}", sealed.seal.alg),
+            signature: sealed.seal.sig,
+            sealed: true,
+        };
+        let audit = LicenseAudit {
+            last_verified: Utc::now(),
+            verifier: "license_validator".to_string(),
+            canonicalized: true,
+        };
+        license = SigilLicense {
+            id: sealed.license.id.unwrap_or_else(|| "sealed-license".to_string()),
+            issued_at: sealed.license.issued_at,
+            expires_at: sealed.license.expires_at,
+            loa: sealed.license.loa.clone(),
+            scope: vec!["runtime:sigil".to_string()],
+            issuer: "sigil_web".to_string(),
+            version: "1.0".to_string(),
+            owner: sealed.license.owner,
+            bindings: sealed.license.bindings,
+            trust,
+            permissions,
+            audit,
+        };
+    }
 
     let now = Utc::now();
     let mut score = 1.0;

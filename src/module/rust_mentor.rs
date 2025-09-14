@@ -116,9 +116,20 @@ impl SigilModule for RustMentorModule {
         chain.set_trust_score(eval.score, eval.allowed);
         chain.finalize_reasoning().map_err(|e| AppError::internal(e))?;
         let frozen = FrozenChain::freeze_reasoning_chain(chain).map_err(|e| AppError::internal(e))?;
-        let _rec = CanonicalRecord::from_frozen_chain(&frozen, user_id, "user", None).map_err(|e| AppError::internal(e))?;
-        
-        // TODO: Fix canon store access - rt.canon_store is a field, not a method
+        let rec = CanonicalRecord::from_frozen_chain(&frozen, user_id, "user", None)
+            .map_err(|e| AppError::internal(e))?;
+
+        // Persist module output to Canon store (sign-on-write via FrozenChain fields)
+        {
+            let mut guard = rt
+                .canon_store
+                .lock()
+                .map_err(|e| AppError::internal(format!("canon store lock poisoned: {e}")))?;
+            guard
+                .add_record(rec.clone(), &user_loa, false)
+                .map_err(|e| AppError::internal(format!("canon write failed: {e}")))?;
+        }
+
         tracing::info!("Module execution completed for user: {}", user_id);
 
         Ok(answer)

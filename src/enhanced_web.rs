@@ -75,17 +75,29 @@ struct ValidateLicenseResponse {
 }
 
 async fn validate_license_endpoint(
-    State(_st): State<Arc<AppState>>,
-    axum::Json(_req): axum::Json<ValidateLicenseRequest>,
+    State(st): State<Arc<AppState>>,
+    axum::Json(req): axum::Json<ValidateLicenseRequest>,
 ) -> Result<axum::Json<ValidateLicenseResponse>, crate::api_errors::AppError> {
-    // TODO: Implement license validation logic
-    // For now, return a mock response
-    Ok(axum::Json(ValidateLicenseResponse {
-        valid: true,
-        loa: Some("operator".to_string()),
-        owner_id: Some("test_user".to_string()),
-        error: None,
-    }))
+    let res = crate::license_validator::validate_license_content(
+        &req.license_content,
+        &st.runtime_id,
+        &st.canon_fingerprint,
+    );
+
+    match res {
+        Ok(v) => Ok(axum::Json(ValidateLicenseResponse {
+            valid: v.valid,
+            loa: Some(format!("{:?}", v.license.loa).to_lowercase()),
+            owner_id: Some(v.license.owner.hash_id),
+            error: None,
+        })),
+        Err(e) => Ok(axum::Json(ValidateLicenseResponse {
+            valid: false,
+            loa: None,
+            owner_id: None,
+            error: Some(e),
+        })),
+    }
 }
 
 // Bootstrap endpoint for initial Root license creation

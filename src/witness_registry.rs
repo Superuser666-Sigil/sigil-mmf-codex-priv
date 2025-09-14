@@ -282,21 +282,16 @@ impl WitnessRegistry {
         let payload = serde_json::to_value(witness)
             .map_err(|e| SigilError::internal(&format!("Failed to serialize witness: {}", e)))?;
 
-        let record = CanonicalRecord {
-            kind: "trusted_witness".to_string(),
-            schema_version: 1,
-            id: format!("witness:{}", witness.witness_id),
-            tenant: "system".to_string(),
-            ts: Utc::now(),
-            space: "system".to_string(),
+        // Sign-on-write: create a signed canonical record
+        let record = CanonicalRecord::new_signed(
+            "trusted_witness",
+            &format!("witness:{}", witness.witness_id),
+            "system",
+            "system",
             payload,
-            links: vec![],
-            prev: None,
-            hash: String::new(), // Will be computed by canonicalizer
-            sig: None,           // System records don't need signatures yet
-            pub_key: None,
-            witnesses: vec![],
-        };
+            None,
+        )
+        .map_err(|e| SigilError::internal(&format!("Failed to create signed record: {}", e)))?;
 
         let mut canon_store = self
             .canon_store
@@ -314,13 +309,16 @@ impl WitnessRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::canon_store_sled::CanonStoreSled;
+    use crate::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
+    use crate::keys::KeyManager;
     use tempfile::TempDir;
 
     fn create_test_registry() -> (WitnessRegistry, TempDir) {
         let temp_dir = TempDir::new().unwrap();
+        let encryption_key = KeyManager::get_encryption_key().unwrap();
         let canon_store = Arc::new(Mutex::new(
-            CanonStoreSled::new(temp_dir.path().to_str().unwrap()).unwrap(),
+            EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key)
+                .unwrap(),
         ));
         let registry = WitnessRegistry::new(canon_store).unwrap();
         (registry, temp_dir)

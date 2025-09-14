@@ -227,9 +227,8 @@ pub fn dispatch(cli: Cli) {
         }
 
         Commands::Diff { id } => {
-            // Initialize canon store for diff operation
+            // Initialize encrypted canon store for diff operation
             use crate::canon_diff_chain::diff_by_id_with_store;
-            use crate::canon_store_sled::CanonStoreSled;
             use crate::license_validator::load_current_loa;
             use std::sync::{Arc, Mutex};
 
@@ -240,12 +239,23 @@ pub fn dispatch(cli: Cli) {
                     return;
                 }
             };
-
-            let store = match CanonStoreSled::new("data/canon_store") {
-                Ok(s) => Arc::new(Mutex::new(s)),
-                Err(e) => {
-                    eprintln!("Failed to open canon store: {e}");
-                    return;
+            let store = {
+                let encryption_key = match crate::keys::KeyManager::get_encryption_key() {
+                    Ok(k) => k,
+                    Err(e) => {
+                        eprintln!("Failed to get encryption key: {e}");
+                        return;
+                    }
+                };
+                match crate::canon_store_sled_encrypted::CanonStoreSled::new(
+                    "data/canon_store",
+                    &encryption_key,
+                ) {
+                    Ok(s) => Arc::new(Mutex::new(s)),
+                    Err(e) => {
+                        eprintln!("Failed to open encrypted canon store: {e}");
+                        return;
+                    }
                 }
             };
 
@@ -264,9 +274,8 @@ pub fn dispatch(cli: Cli) {
             }
         }
         Commands::Revert { id, to_hash } => {
-            // Initialize canon store for revert operation
+            // Initialize encrypted canon store for revert operation
             use crate::canon_store::revert_node_with_store;
-            use crate::canon_store_sled::CanonStoreSled;
             use crate::license_validator::load_current_loa;
             use std::sync::{Arc, Mutex};
 
@@ -277,12 +286,23 @@ pub fn dispatch(cli: Cli) {
                     return;
                 }
             };
-
-            let store = match CanonStoreSled::new("data/canon_store") {
-                Ok(s) => Arc::new(Mutex::new(s)),
-                Err(e) => {
-                    eprintln!("Failed to open canon store: {e}");
-                    return;
+            let store = {
+                let encryption_key = match crate::keys::KeyManager::get_encryption_key() {
+                    Ok(k) => k,
+                    Err(e) => {
+                        eprintln!("Failed to get encryption key: {e}");
+                        return;
+                    }
+                };
+                match crate::canon_store_sled_encrypted::CanonStoreSled::new(
+                    "data/canon_store",
+                    &encryption_key,
+                ) {
+                    Ok(s) => Arc::new(Mutex::new(s)),
+                    Err(e) => {
+                        eprintln!("Failed to open encrypted canon store: {e}");
+                        return;
+                    }
                 }
             };
 

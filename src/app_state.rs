@@ -49,8 +49,29 @@ impl AppState {
     }
 
     pub async fn audit_license_issued(&self, owner_id: &str, loa: &str) -> anyhow::Result<()> {
-        // write a FrozenChain/CanonicalRecord in system space documenting issuance
-        // TODO: Implement audit trail for license issuance
+        // Write a signed CanonicalRecord in system space documenting issuance
+        let payload = serde_json::json!({
+            "event": "license_issued",
+            "owner_id": owner_id,
+            "loa": loa,
+            "ts": chrono::Utc::now().to_rfc3339(),
+        });
+        let rec = crate::canonical_record::CanonicalRecord::new_signed(
+            "system_audit",
+            &format!("license_issued:{}", owner_id),
+            "system",
+            "system",
+            payload,
+            None,
+        )?;
+
+        let mut guard = self
+            .canon_store
+            .lock()
+            .map_err(|e| anyhow::anyhow!("canon store lock poisoned: {e}"))?;
+        guard
+            .add_record(rec, &crate::loa::LOA::Root, true)
+            .map_err(|e| anyhow::anyhow!("canon write failed: {e}"))?;
         tracing::info!("License issued: owner={}, loa={}", owner_id, loa);
         Ok(())
     }

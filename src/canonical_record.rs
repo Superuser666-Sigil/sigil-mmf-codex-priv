@@ -269,12 +269,10 @@ impl CanonicalRecord {
         let digest = hasher.finalize();
         let hash_hex = hex::encode(digest);
 
-        // Generate a new signing key for this record.  In a real
-        // deployment this key would be loaded from secure storage.
-        let signing_key = SigningKey::generate(&mut OsRng);
-        let signature = signing_key.sign(canon_json.as_bytes());
-        let sig_b64 = B64.encode(&signature.to_bytes());
-        let pub_b64 = B64.encode(&signing_key.verifying_key().to_bytes());
+        // Sign using the runtime Canon key from secure storage
+        let canon_key = crate::keys::KeyManager::get_or_create_canon_key()
+            .map_err(|e| format!("Failed to get canon signing key: {e}"))?;
+        let (sig_b64, pub_b64) = canon_key.sign_record(canon_json.as_bytes());
 
         // Populate the hash, signature and public key on the record.
         record.hash = hash_hex;

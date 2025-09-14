@@ -6,7 +6,8 @@ use axum::{
 };
 use mmf_sigil::sigilweb::{build_trust_router, TrustCheckRequest};
 use mmf_sigil::sigil_runtime_core::SigilRuntimeCore;
-use mmf_sigil::canon_store_sled::CanonStoreSled;
+use mmf_sigil::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
+use mmf_sigil::keys::KeyManager;
 use mmf_sigil::loa::LOA;
 use mmf_sigil::runtime_config::RuntimeConfig;
 use std::sync::Mutex;
@@ -19,7 +20,9 @@ async fn trust_check_returns_200_on_valid_payload() {
     // Create an in-memory Canon store for the runtime
     let temp_dir = tempfile::tempdir().expect("temp dir should be created");
     let path = temp_dir.path().to_str().unwrap();
-    let store = CanonStoreSled::new(path).expect("should create canon store");
+    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let store = EncryptedCanonStoreSled::new(path, &encryption_key)
+        .expect("should create encrypted canon store");
     let core = SigilRuntimeCore::new(LOA::Observer, Arc::new(Mutex::new(store)), RuntimeConfig::default()).expect("runtime init");
     let core = Arc::new(RwLock::new(core));
     let app: Router = build_trust_router(core);
@@ -47,7 +50,9 @@ async fn trust_check_returns_200_on_valid_payload() {
 async fn trust_check_rejects_malformed_loa() {
     let temp_dir = tempfile::tempdir().expect("temp dir should be created");
     let path = temp_dir.path().to_str().unwrap();
-    let store = CanonStoreSled::new(path).expect("should create canon store");
+    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let store = EncryptedCanonStoreSled::new(path, &encryption_key)
+        .expect("should create encrypted canon store");
     let core = SigilRuntimeCore::new(LOA::Observer, Arc::new(Mutex::new(store)), RuntimeConfig::default()).expect("runtime init");
     let core = Arc::new(RwLock::new(core));
     let app = build_trust_router(core);

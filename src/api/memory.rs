@@ -84,20 +84,34 @@ pub async fn memory_list(
     headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<MemoryListItem>>, AppError> {
     let user: CurrentUser = extract_current_user_from_headers(&headers)?;
-    // For now, return empty list since we need to implement list_by_kind_and_tenant
-    // TODO: Implement proper memory listing from canon store
-    let _recs: Vec<CanonicalRecord> = vec![];
-    
-    // Mock response for now
-    let out = vec![
-        MemoryListItem {
-            id: format!("mem_{}_{}", user.user_id, "example"),
-            ts: OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
-            key: "example".to_string(),
-        }
-    ];
-    
-    Ok(Json(out))
+    // Fetch memory records from canon store and filter by tenant (user)
+    let recs: Vec<CanonicalRecord> = {
+        let guard = _st
+            .canon_store
+            .lock()
+            .map_err(|e| AppError::internal(format!("canon store lock poisoned: {e}")))?;
+        guard.list_records(Some("memory_block"), &user.loa)
+    };
+
+    let items: Vec<MemoryListItem> = recs
+        .into_iter()
+        .filter(|r| r.tenant == user.user_id)
+        .map(|r| MemoryListItem {
+            id: r.id.clone(),
+            ts: r.ts.to_rfc3339(),
+            key: r
+                .payload
+                .get("key")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .split("::")
+                .last()
+                .unwrap_or("")
+                .to_string(),
+        })
+        .collect();
+
+    Ok(Json(items))
 }
 
 #[derive(Deserialize)]

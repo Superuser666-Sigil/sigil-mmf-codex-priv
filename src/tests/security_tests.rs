@@ -108,7 +108,8 @@ fn test_trust_model_default_deny() {
 /// Test quorum system functionality
 #[test]
 fn test_quorum_system() -> SigilResult<()> {
-    use crate::canon_store_sled::CanonStoreSled;
+    use crate::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
+    use crate::keys::KeyManager;
     use crate::witness_registry::WitnessRegistry;
     use base64::Engine;
     use ed25519_dalek::{Signer, SigningKey};
@@ -118,8 +119,9 @@ fn test_quorum_system() -> SigilResult<()> {
     // Create test infrastructure
     let temp_dir = TempDir::new().unwrap();
     let store_path = temp_dir.path().join("test_canon.db");
+    let encryption_key = KeyManager::get_encryption_key().unwrap();
     let canon_store = Arc::new(Mutex::new(
-        CanonStoreSled::new(store_path.to_str().unwrap()).unwrap(),
+        EncryptedCanonStoreSled::new(store_path.to_str().unwrap(), &encryption_key).unwrap(),
     ));
 
     // Create witness registry with real witnesses

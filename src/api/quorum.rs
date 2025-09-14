@@ -50,9 +50,16 @@ pub async fn commit_system_proposal(
     st.verify_record_signatures(&record)
         .map_err(|_| AppError::forbidden("signature verification failed"))?;
 
-    // TODO: Commit to Canon store as Root
-    // st.canon_store.add_record(record.clone(), &LOA::Root, false)
-    //     .map_err(|_| AppError::internal("canon write failed"))?;
+    // Persist to Canon store as Root
+    {
+        let mut guard = st
+            .canon_store
+            .lock()
+            .map_err(|e| AppError::internal(format!("canon store lock poisoned: {e}")))?;
+        guard
+            .add_record(record.clone(), &LOA::Root, true)
+            .map_err(|e| AppError::internal(format!("canon write failed: {e}")))?;
+    }
     tracing::info!("System proposal committed: {}", committed_proposal.id);
 
     Ok((StatusCode::OK, Json(CommitResponse { 
