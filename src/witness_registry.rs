@@ -87,7 +87,7 @@ impl WitnessRegistry {
             if cache.contains_key(&witness_id) {
                 return Err(SigilError::invalid_input(
                     "add_witness",
-                    &format!("Witness {} already exists", witness_id),
+                    format!("Witness {} already exists", witness_id),
                 ));
             }
         }
@@ -280,7 +280,7 @@ impl WitnessRegistry {
     /// Store a witness in Canon as a CanonicalRecord
     fn store_witness_in_canon(&self, witness: &TrustedWitness) -> SigilResult<()> {
         let payload = serde_json::to_value(witness)
-            .map_err(|e| SigilError::internal(&format!("Failed to serialize witness: {}", e)))?;
+            .map_err(|e| SigilError::internal(format!("Failed to serialize witness: {}", e)))?;
 
         // Sign-on-write: create a signed canonical record
         let record = CanonicalRecord::new_signed(
@@ -291,7 +291,7 @@ impl WitnessRegistry {
             payload,
             None,
         )
-        .map_err(|e| SigilError::internal(&format!("Failed to create signed record: {}", e)))?;
+        .map_err(|e| SigilError::internal(format!("Failed to create signed record: {}", e)))?;
 
         let mut canon_store = self
             .canon_store
@@ -300,7 +300,7 @@ impl WitnessRegistry {
 
         canon_store
             .add_record(record, &LOA::Root, true)
-            .map_err(|e| SigilError::internal(&format!("Failed to store witness: {}", e)))?;
+            .map_err(|e| SigilError::internal(format!("Failed to store witness: {}", e)))?;
 
         Ok(())
     }

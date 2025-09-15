@@ -3,11 +3,15 @@
 
 use crate::audit::{AuditEvent, LogLevel};
 use crate::loa::LOA;
+use crate::canonicalize::canonicalize_json;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use toml;
+use sha2::{Sha256, Digest};
+use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
+use ed25519_dalek::Verifier;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -132,6 +136,45 @@ pub fn validate_license_content(
 
         let sealed: SealedFile = toml::from_str(content)
             .map_err(|e| format!("Deserialize error: {e}"))?;
+
+        // Verify sealed license: canonicalize license -> hash -> compare -> verify signature over canonical bytes
+        let lic_val = serde_json::to_value(&sealed.license)
+            .map_err(|e| format!("Serialize license failed: {e}"))?;
+        let canon_str = canonicalize_json(&lic_val)
+            .map_err(|e| format!("Canonicalize license failed: {e}"))?;
+        let digest = Sha256::digest(canon_str.as_bytes());
+        let digest_b64 = B64.encode(digest);
+        if digest_b64 != sealed.seal.content_hash {
+            return Err("License seal content hash mismatch".into());
+        }
+        let sig_bytes = B64
+            .decode(&sealed.seal.sig)
+            .map_err(|_| "Invalid signature encoding")?;
+        if sig_bytes.len() != 64 {
+            return Err("Invalid signature length".into());
+        }
+        let signature = ed25519_dalek::Signature::from_bytes(
+            sig_bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| "sig bytes")?,
+        );
+        let pk_bytes = B64
+            .decode(&sealed.seal.pubkey)
+            .map_err(|_| "Invalid public key encoding")?;
+        if pk_bytes.len() != 32 {
+            return Err("Invalid public key length".into());
+        }
+        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(
+            pk_bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| "pk bytes")?,
+        )
+        .map_err(|_| "Invalid verifying key")?;
+        verifying_key
+            .verify(canon_str.as_bytes(), &signature)
+            .map_err(|_| "License signature verification failed")?;
 
         // Map SimpleLicense + seal into SigilLicense shape for validation output
         let permissions = LicensePermissions {

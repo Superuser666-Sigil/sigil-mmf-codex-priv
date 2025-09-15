@@ -39,6 +39,7 @@ pub struct ModuleContext {
 }
 
 /// Module registry for managing loaded modules
+#[derive(Default)]
 pub struct ModuleRegistry {
     modules: std::collections::HashMap<String, Box<dyn SigilModule + Send + Sync>>,
 }
@@ -76,11 +77,7 @@ impl ModuleRegistry {
     }
 }
 
-impl Default for ModuleRegistry {
-    fn default() -> Self {
-        Self { modules: std::collections::HashMap::new() }
-    }
-}
+// Default is derived above
 
 /// Built-in hello module for testing
 pub struct HelloModule;

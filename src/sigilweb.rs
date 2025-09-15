@@ -233,7 +233,7 @@ async fn check_trust(
         session_id: req.session_id.clone(),
         loa: req.loa.clone(),
     }) {
-        return Err(crate::errors::SigilError::validation("input", &format!("Input validation failed: {e}")));
+        return Err(crate::errors::SigilError::validation("input", format!("Input validation failed: {e}")));
     }
 
     // increment metric
@@ -241,7 +241,7 @@ async fn check_trust(
     if let Some(counter) = TRUST_CHECK_TOTAL.get() {
         counter.inc();
     }
-    let loa = LOA::from_str(&req.loa).map_err(|e| crate::errors::SigilError::validation("loa", &format!("Invalid LOA: {e}")))?;
+    let loa = LOA::from_str(&req.loa).map_err(|e| crate::errors::SigilError::validation("loa", format!("Invalid LOA: {e}")))?;
     let event = AuditEvent::new(
         &req.who,
         &req.action,

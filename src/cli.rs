@@ -656,7 +656,7 @@ fn generate_license_command(
 id = "{license_id}"
 issuedAt = "{issued_at}"
 expiresAt = "{expires_at}"
-loa = "{loa_name}"
+loa = "{loa:?}"
 scope = ["canon:system", "module:builtin", "runtime:sigil"]
 issuer = "sigil_trust_v1"
 version = "1.0"
@@ -691,7 +691,7 @@ canonicalized = true
         license_id = license_id,
         issued_at = now.to_rfc3339(),
         expires_at = expires_at.to_rfc3339(),
-        loa_name = format!("{:?}", loa),
+        loa = loa,
         owner_name = owner_name,
         short_id = &hash_id[..8],
         owner_email = owner_email,

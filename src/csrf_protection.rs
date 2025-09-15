@@ -36,10 +36,11 @@ impl CSRFProtection {
         let tokens = self.tokens.write().await;
         let now = Instant::now();
 
-        if let Some((stored_token, created)) = tokens.get(session_id) {
-            if stored_token == token && now.duration_since(*created) < self.token_lifetime {
-                return true;
-            }
+        if let Some((stored_token, created)) = tokens.get(session_id)
+            && stored_token == token
+            && now.duration_since(*created) < self.token_lifetime
+        {
+            return true;
         }
 
         false

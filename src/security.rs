@@ -97,9 +97,10 @@ pub fn extract_current_user(
     }
 
     // Dev fallback controlled by env
+    // Default to disabled for production-hardening; opt-in via MMF_DEV_HEADER_AUTH=true
     let dev_ok = std::env::var("MMF_DEV_HEADER_AUTH")
         .map(|v| v.to_lowercase() == "true")
-        .unwrap_or(true);
+        .unwrap_or(false);
     if dev_ok {
         return extract_current_user_from_headers(headers);
     }

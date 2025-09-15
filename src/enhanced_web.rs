@@ -52,7 +52,7 @@ async fn run_rust_mentor_module(
     let module = crate::module::RustMentorModule::new();
     
     // Run the module
-    match module.run(req.input, &req.session_id, &req.user_id, &*runtime).await {
+    match module.run(req.input, &req.session_id, &req.user_id, &runtime).await {
         Ok(output) => Ok(axum::Json(crate::sigilweb::ModuleRunResponse::from_output(output))),
         Err(e) => Ok(axum::Json(crate::sigilweb::ModuleRunResponse::from_error(e.to_string()))),
     }

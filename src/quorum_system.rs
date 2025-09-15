@@ -58,7 +58,7 @@ impl SystemProposal {
         if self.signers.iter().any(|s| s.witness_id == witness_id) {
             return Err(crate::errors::SigilError::invalid_input(
                 "add_signature",
-                &format!("Witness {} already signed this proposal", witness_id),
+                format!("Witness {} already signed this proposal", witness_id),
             ));
         }
 

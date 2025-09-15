@@ -175,13 +175,11 @@ impl SigilRuntimeCore {
         // payload as JSON {"value": number}.
         for rec in &model_entries {
             if rec.id == "trust_threshold" {
-                if let Ok(val) = serde_json::from_value::<serde_json::Value>(rec.payload.clone()) {
-                    if let Some(threshold_value) = val.as_object().and_then(|obj| obj.get("value"))
-                    {
-                        if let Some(th) = threshold_value.as_f64() {
-                            self.threshold = th;
-                        }
-                    }
+                if let Ok(val) = serde_json::from_value::<serde_json::Value>(rec.payload.clone())
+                    && let Some(threshold_value) = val.as_object().and_then(|obj| obj.get("value"))
+                    && let Some(th) = threshold_value.as_f64()
+                {
+                    self.threshold = th;
                 }
                 break;
             }

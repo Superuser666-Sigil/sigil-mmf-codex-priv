@@ -281,7 +281,7 @@ impl CanonSigningKey {
             version: 1,
             encrypted_private_key_b64: B64.encode(&encrypted_private_key),
             public_key_b64: B64.encode(self.verifying_key.to_bytes()),
-            nonce_b64: B64.encode(&nonce_bytes),
+            nonce_b64: B64.encode(nonce_bytes),
             created_at: chrono::Utc::now().to_rfc3339(),
             key_index,
             purpose: purpose.to_string(),

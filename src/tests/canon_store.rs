@@ -129,6 +129,101 @@ fn test_jcs_canonicalization_consistency() {
 }
 
 #[test]
+fn concurrent_writes_encrypted_store() {
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+
+    let temp_dir = tempdir().expect("should be able to create temp dir for test");
+    let path = temp_dir
+        .path()
+        .to_str()
+        .expect("temp path should be valid UTF-8");
+
+    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let store = Arc::new(Mutex::new(
+        EncryptedCanonStoreSled::new(path, &encryption_key)
+            .expect("should be able to create encrypted CanonStore"),
+    ));
+
+    let threads = 8;
+    let per_thread = 10;
+
+    let mut handles = Vec::new();
+    for t in 0..threads {
+        let store_cloned = store.clone();
+        handles.push(thread::spawn(move || {
+            for i in 0..per_thread {
+                let id = format!("concurrent_{}_{}", t, i);
+                let payload = serde_json::json!({
+                    "schema_version": 1,
+                    "key": id,
+                    "text": "hello",
+                });
+                let rec = CanonicalRecord::new_signed(
+                    "memory_block",
+                    &id,
+                    "tester",
+                    "user",
+                    payload,
+                    None,
+                )
+                .expect("signed record");
+                let mut guard = store_cloned.lock().unwrap();
+                guard
+                    .add_record(rec, &LOA::Operator, false)
+                    .expect("write");
+            }
+        }));
+    }
+
+    for h in handles { h.join().expect("join"); }
+
+    let guard = store.lock().unwrap();
+    let records = guard.list_records(Some("memory_block"), &LOA::Operator);
+    assert!(
+        records.len() >= (threads * per_thread) as usize,
+        "expected at least {} records, got {}",
+        threads * per_thread,
+        records.len()
+    );
+}
+
+#[test]
+fn crash_recovery_persists_records() {
+    // Write a record, drop store, reopen, and ensure it still exists
+    let temp_dir = tempdir().expect("temp dir");
+    let path = temp_dir.path().to_str().unwrap();
+    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+
+    {
+        let mut store = EncryptedCanonStoreSled::new(path, &encryption_key).expect("open store");
+        let payload = serde_json::json!({
+            "schema_version": 1,
+            "key": "persist_test",
+            "text": "hello",
+        });
+        let rec = CanonicalRecord::new_signed(
+            "memory_block",
+            "persist_test",
+            "tester",
+            "user",
+            payload,
+            None,
+        )
+        .expect("signed record");
+        store
+            .add_record(rec, &LOA::Operator, false)
+            .expect("write");
+        // store dropped here
+    }
+
+    // Reopen
+    let store = EncryptedCanonStoreSled::new(path, &encryption_key).expect("reopen");
+    let got = store.load_record("persist_test", &LOA::Operator);
+    assert!(got.is_some(), "record should persist after reopen");
+}
+
+#[test]
 fn test_canon_write_verify_round_trip_with_quorum() {
     use crate::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
     use crate::canonical_record::CanonicalRecord;

@@ -1,11 +1,15 @@
 use crate::canon_store::CanonStore;
 use crate::canonical_record::CanonicalRecord;
 use crate::loa::{LOA, can_read_canon, can_write_canon};
+use crate::audit::{AuditEvent, LogLevel};
 use chrono::{DateTime, Utc};
 use serde_json;
 use sled::Db;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use ed25519_dalek::Verifier;
+use sha2::Digest;
 
 /// Database audit event for tracking access
 #[derive(Debug, Clone)]
@@ -126,6 +130,49 @@ impl CanonStoreSled {
             .decrypt(nonce.into(), data)
             .map_err(|e| format!("Decryption failed: {e}"))
     }
+
+    fn verify_record_integrity(record: &CanonicalRecord) -> Result<(), &'static str> {
+        // Basic presence checks
+        if record.hash.is_empty() {
+            return Err("missing hash");
+        }
+        let sig_b64 = record.sig.as_ref().ok_or("missing signature")?;
+        let pk_b64 = record.pub_key.as_ref().ok_or("missing public key")?;
+
+        // Recompute canonical JSON and hash
+        let canonical_json = record
+            .to_canonical_json()
+            .map_err(|_| "canonicalization failed")?;
+        let recomputed = sha2::Sha256::digest(canonical_json.as_bytes());
+        let recomputed_hex = hex::encode(recomputed);
+        if recomputed_hex != record.hash {
+            return Err("hash mismatch");
+        }
+
+        // Decode signature and public key
+        let sig_bytes = B64.decode(sig_b64).map_err(|_| "invalid signature b64")?;
+        if sig_bytes.len() != 64 {
+            return Err("invalid signature length");
+        }
+        let signature = ed25519_dalek::Signature::from_bytes(sig_bytes.as_slice().try_into().map_err(|_| "sig bytes")?);
+
+        let pk_bytes = B64.decode(pk_b64).map_err(|_| "invalid pubkey b64")?;
+        if pk_bytes.len() != 32 {
+            return Err("invalid pubkey length");
+        }
+        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(pk_bytes.as_slice().try_into().map_err(|_| "pk bytes")?)
+            .map_err(|_| "invalid verifying key")?;
+
+        // Accept signature either over canonical json bytes (preferred) or over the hash bytes (compat)
+        let mut ok = verifying_key.verify(canonical_json.as_bytes(), &signature).is_ok();
+        if !ok
+            && let Ok(hash_bytes) = hex::decode(&record.hash)
+        {
+            ok = verifying_key.verify(&hash_bytes, &signature).is_ok();
+        }
+        if !ok { return Err("signature verification failed"); }
+        Ok(())
+    }
 }
 
 impl CanonStore for CanonStoreSled {
@@ -155,6 +202,8 @@ impl CanonStore for CanonStoreSled {
         if !can_write_canon(loa) {
             return Err("Insufficient LOA to write canon record");
         }
+        // Enforce sign-on-write integrity checks
+        Self::verify_record_integrity(&record)?;
         let user_id = format!("loa_{loa:?}");
         self.access_control
             .log_operation(&user_id, "write", &record.id, true);
@@ -165,6 +214,19 @@ impl CanonStore for CanonStoreSled {
         self.db
             .insert(record.id.as_str(), encrypted)
             .map_err(|_| "Write failed")?;
+        // Flush to ensure durability
+        self.db.flush().map_err(|_| "Flush failed")?;
+
+        // Audit hook (best-effort)
+        let _ = AuditEvent::new(
+            &user_id,
+            "canon_write",
+            Some(&record.id),
+            "canon_store",
+            loa,
+        )
+        .with_severity(LogLevel::Info)
+        .write_to_log();
         Ok(())
     }
 

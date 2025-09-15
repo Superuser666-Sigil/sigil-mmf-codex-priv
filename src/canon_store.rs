@@ -68,22 +68,16 @@ pub fn revert_node_with_store(
 
     let target = target_record.ok_or_else(|| SigilError::not_found("record with hash", to_hash))?;
 
-    // Create a new record based on the target but with updated metadata
-    let reverted_record = CanonicalRecord {
-        id: current_record.id.clone(),
-        kind: target.kind,
-        schema_version: target.schema_version,
-        tenant: target.tenant,
-        ts: chrono::Utc::now(),
-        space: target.space,
-        payload: target.payload,
-        links: target.links,
-        prev: Some(current_record.id.clone()), // Link to the current record as previous
-        hash: String::new(),                   // Will be computed during canonicalization
-        sig: None,                             // Will be signed during persistence
-        pub_key: None,                         // Will be set during persistence
-        witnesses: Vec::new(),
-    };
+    // Create a new signed record based on the target payload with updated metadata
+    let reverted_record = CanonicalRecord::new_signed(
+        &target.kind,
+        &current_record.id,
+        &target.tenant,
+        &target.space,
+        target.payload.clone(),
+        Some(current_record.id.clone()),
+    )
+    .map_err(|e| SigilError::canon("revert", &e))?;
 
     // Add the reverted record to the store
     store
