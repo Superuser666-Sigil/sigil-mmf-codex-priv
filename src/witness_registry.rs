@@ -93,7 +93,7 @@ impl WitnessRegistry {
         }
 
         // Validate public key format (basic check for base64)
-        if let Err(_) = base64::engine::general_purpose::STANDARD.decode(&public_key) {
+        if base64::engine::general_purpose::STANDARD.decode(&public_key).is_err() {
             return Err(SigilError::invalid_input(
                 "add_witness",
                 "Invalid base64 public key",

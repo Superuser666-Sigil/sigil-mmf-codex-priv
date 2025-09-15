@@ -1,5 +1,4 @@
 use crate::canon_store::CanonStore;
-use crate::canon_store_sled::CanonStoreSled;
 use crate::canonical_record::CanonicalRecord;
 use crate::loa::LOA;
 use crate::sigil_vault::VaultMemoryBlock;
@@ -17,7 +16,7 @@ pub struct SigilSnapshot {
 
 pub fn restore_from_snapshot(
     path: &str,
-    canon_store: &mut CanonStoreSled,
+    canon_store: &mut dyn CanonStore,
     allow_operator: bool,
 ) -> Result<(), &'static str> {
     let mut file = File::open(Path::new(path)).map_err(|_| "Unable to open snapshot file")?;

@@ -9,7 +9,7 @@ use std::{sync::Arc, path::PathBuf};
 
 use crate::{
     api_errors::AppError,
-    security::{CurrentUser, extract_current_user_from_headers},
+    security::extract_current_user,
     app_state::AppState,
     loa::LOA,
 };
@@ -53,7 +53,7 @@ pub async fn create_license_root_only(
     headers: axum::http::HeaderMap,
     Json(req): Json<CreateLicenseRequest>,
 ) -> Result<(StatusCode, Json<CreateLicenseResponse>), AppError> {
-    let user: CurrentUser = extract_current_user_from_headers(&headers)?;
+    let user = extract_current_user(&headers, &st.runtime_id, &st.canon_fingerprint)?;
     if user.loa != LOA::Root {
         return Err(AppError::forbidden("only root can create licenses"));
     }

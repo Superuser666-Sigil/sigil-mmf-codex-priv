@@ -6,7 +6,7 @@ use crate::trust_linear::{TrustFeatures, TrustLinearModel};
 /// Simple test to verify our implementation works
 #[test]
 fn test_basic_functionality() {
-    assert!(true, "Basic test should pass");
+    // smoke check
 }
 
 /// Test trust linear model functionality
@@ -84,8 +84,7 @@ fn test_trust_model_default_deny() {
     );
 
     // Create a model with wrong number of weights to trigger mismatch
-    let mut wrong_weights = crate::trust_linear::TrustWeights::default();
-    wrong_weights.weights = vec![0.1, 0.2, 0.3]; // Only 3 weights instead of 5
+    let mut wrong_weights = crate::trust_linear::TrustWeights { weights: vec![0.1, 0.2, 0.3], ..Default::default() }; // Only 3 weights instead of 5
     let wrong_model = TrustLinearModel::new(wrong_weights);
 
     let (score, allowed) = wrong_model.evaluate(&features);

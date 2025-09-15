@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use crate::audit::AuditEvent;
 use crate::canon_store::CanonStore;
-use crate::canon_store_sled::CanonStoreSled;
+use crate::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
+use crate::keys::KeyManager;
 use crate::canonical_record::CanonicalRecord;
 use crate::config_loader::load_config;
 use crate::loa::LOA;
@@ -32,8 +33,11 @@ pub fn run_loader(file_path: &str, license_token: &str) -> Result<(), String> {
 
     let entries: Vec<TrustedKnowledgeEntry> =
         serde_json::from_str(&contents).map_err(|_| "Invalid canon file format")?;
-    let mut store =
-        CanonStoreSled::new("data/canon").map_err(|_| "Failed to create canon store")?;
+    // Use encrypted Sled backend and managed encryption key
+    let enc_key = KeyManager::get_encryption_key()
+        .map_err(|_| "Failed to get encryption key for canon store")?;
+    let mut store = EncryptedCanonStoreSled::new("data/canon", &enc_key)
+        .map_err(|_| "Failed to create encrypted canon store")?;
 
     for mut entry in entries {
         // Force verdict to Allow for imported entries

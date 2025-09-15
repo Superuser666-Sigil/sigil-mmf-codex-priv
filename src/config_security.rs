@@ -99,13 +99,12 @@ impl SecureConfig {
             }
 
             // Ensure audit log directory exists
-            if let Some(parent) = Path::new(&audit_log).parent() {
-                if !parent.exists() {
+            if let Some(parent) = Path::new(&audit_log).parent()
+                && !parent.exists() {
                     errors.push(format!(
                         "Audit log directory '{}' does not exist",
                         parent.display()
                     ));
-                }
             }
         }
 
@@ -263,7 +262,7 @@ mod tests {
 
         let secure_config = SecureConfig::new(test_key);
         match secure_config {
-            Ok(_) => assert!(true),
+            Ok(_) => (),
             Err(e) => panic!("Failed to create secure config: {}", e),
         }
     }

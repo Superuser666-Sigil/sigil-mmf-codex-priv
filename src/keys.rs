@@ -152,12 +152,10 @@ impl KeyStore {
             let entry = entry?;
             let path = entry.path();
 
-            if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                if let Ok((key, key_index)) = CanonSigningKey::load_encrypted(&path, encryption_key)
-                {
-                    store.add_key(key_index, key);
-                }
-                // Ignore files that can't be loaded as encrypted keys
+            if path.extension().and_then(|s| s.to_str()) == Some("json")
+                && let Ok((key, key_index)) = CanonSigningKey::load_encrypted(&path, encryption_key)
+            {
+                store.add_key(key_index, key);
             }
         }
 
@@ -192,6 +190,10 @@ impl KeyStore {
 
         Ok(())
     }
+}
+
+impl Default for KeyStore {
+    fn default() -> Self { Self::new() }
 }
 
 impl CanonSigningKey {

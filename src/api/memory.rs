@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::{
     app_state::AppState, 
-    security::{CurrentUser, extract_current_user_from_headers}, 
+    security::extract_current_user, 
     loa::LOA, 
     api_errors::AppError,
     canonical_record::CanonicalRecord,
@@ -30,7 +30,7 @@ pub async fn memory_write(
     headers: axum::http::HeaderMap,
     Json(req): Json<MemoryWriteReq>,
 ) -> Result<(StatusCode, Json<MemoryWriteResp>), AppError> {
-    let user: CurrentUser = extract_current_user_from_headers(&headers)?;
+    let user = extract_current_user(&headers, &_st.runtime_id, &_st.canon_fingerprint)?;
     if user.loa < LOA::Operator {
         return Err(AppError::forbidden("requires Operator"));
     }
@@ -83,7 +83,7 @@ pub async fn memory_list(
     State(_st): State<Arc<AppState>>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<MemoryListItem>>, AppError> {
-    let user: CurrentUser = extract_current_user_from_headers(&headers)?;
+    let user = extract_current_user(&headers, &_st.runtime_id, &_st.canon_fingerprint)?;
     // Fetch memory records from canon store and filter by tenant (user)
     let recs: Vec<CanonicalRecord> = {
         let guard = _st
@@ -134,7 +134,7 @@ pub async fn rag_upsert(
     headers: axum::http::HeaderMap,
     Json(req): Json<RagUpsertReq>,
 ) -> Result<(StatusCode, Json<RagUpsertResp>), AppError> {
-    let user: CurrentUser = extract_current_user_from_headers(&headers)?;
+    let user = extract_current_user(&headers, &_st.runtime_id, &_st.canon_fingerprint)?;
     if user.loa < LOA::Operator {
         return Err(AppError::forbidden("requires Operator"));
     }

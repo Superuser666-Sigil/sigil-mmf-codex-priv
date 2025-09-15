@@ -217,12 +217,11 @@ async fn check_trust(
     }
 
     // CSRF protection check
-    if let Some(csrf_token) = headers.get("x-csrf-token") {
-        if let Ok(token) = csrf_token.to_str() {
-            if !csrf_protection.validate_token(&req.session_id, token).await {
-                return Err(crate::errors::SigilError::auth("Invalid CSRF token"));
-            }
-        }
+    if let Some(csrf_token) = headers.get("x-csrf-token")
+        && let Ok(token) = csrf_token.to_str()
+        && !csrf_protection.validate_token(&req.session_id, token).await
+    {
+        return Err(crate::errors::SigilError::auth("Invalid CSRF token"));
     }
 
     // Validate input
@@ -320,13 +319,11 @@ async fn register_extension_api(
     }
 
     // CSRF protection check
-    if let Some(csrf_token) = headers.get("x-csrf-token") {
-        if let Ok(token) = csrf_token.to_str() {
-            // For extension registration, we'll use the name as session ID
-            if !csrf_protection.validate_token(&req.name, token).await {
-                return Err((StatusCode::FORBIDDEN, "Invalid CSRF token".to_string()));
-            }
-        }
+    if let Some(csrf_token) = headers.get("x-csrf-token")
+        && let Ok(token) = csrf_token.to_str()
+        && !csrf_protection.validate_token(&req.name, token).await
+    {
+        return Err((StatusCode::FORBIDDEN, "Invalid CSRF token".to_string()));
     }
 
     // Input validation using the validator
@@ -476,12 +473,11 @@ async fn run_module(
     }
 
     // CSRF protection
-    if let Some(csrf_token) = headers.get("x-csrf-token") {
-        if let Ok(token) = csrf_token.to_str() {
-            if !csrf_protection.validate_token(&req.session_id, token).await {
-                return Err((StatusCode::FORBIDDEN, "Invalid CSRF token".to_string()));
-            }
-        }
+    if let Some(csrf_token) = headers.get("x-csrf-token")
+        && let Ok(token) = csrf_token.to_str()
+        && !csrf_protection.validate_token(&req.session_id, token).await
+    {
+        return Err((StatusCode::FORBIDDEN, "Invalid CSRF token".to_string()));
     }
 
     // Validate user_id is not empty
@@ -720,15 +716,13 @@ async fn canon_system_propose(
         return Err(crate::errors::SigilError::RateLimited { message: "Rate limit exceeded".to_string() });
     }
 
-    if let Some(csrf_token) = headers.get("x-csrf-token") {
-        if let Ok(token) = csrf_token.to_str() {
-            if !csrf_protection
+    if let Some(csrf_token) = headers.get("x-csrf-token")
+        && let Ok(token) = csrf_token.to_str()
+        && !csrf_protection
                 .validate_token("system_propose", token)
                 .await
-            {
-                return Err(crate::errors::SigilError::auth("Invalid CSRF token"));
-            }
-        }
+    {
+        return Err(crate::errors::SigilError::auth("Invalid CSRF token"));
     }
 
     // Validate required fields
@@ -816,12 +810,11 @@ async fn canon_system_attest(
         return Err(crate::errors::SigilError::RateLimited { message: "Rate limit exceeded".to_string() });
     }
 
-    if let Some(csrf_token) = headers.get("x-csrf-token") {
-        if let Ok(token) = csrf_token.to_str() {
-            if !csrf_protection.validate_token(&req.witness_id, token).await {
-                return Err(crate::errors::SigilError::auth("Invalid CSRF token"));
-            }
-        }
+    if let Some(csrf_token) = headers.get("x-csrf-token")
+        && let Ok(token) = csrf_token.to_str()
+        && !csrf_protection.validate_token(&req.witness_id, token).await
+    {
+        return Err(crate::errors::SigilError::auth("Invalid CSRF token"));
     }
 
     // Validate required fields

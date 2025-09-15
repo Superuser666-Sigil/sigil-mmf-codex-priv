@@ -371,7 +371,7 @@ mod tests {
         };
 
         let child_chain =
-            SecureAuditChain::create_chain(child_data, &[parent_chain.clone()], &signing_key)
+            SecureAuditChain::create_chain(child_data, std::slice::from_ref(&parent_chain), &signing_key)
                 .unwrap();
 
         // Verify lineage

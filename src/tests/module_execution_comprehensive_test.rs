@@ -401,8 +401,9 @@ fn test_module_context_validation() {
 fn test_module_isolation() {
     // Test that modules don't interfere with each other
     let temp_dir = TempDir::new().unwrap();
+    let encryption_key = KeyManager::get_encryption_key().unwrap();
     let canon_store = Arc::new(Mutex::new(
-        CanonStoreSled::new(temp_dir.path().to_str().unwrap()).unwrap(),
+        EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));
 
     let config = RuntimeConfig {
@@ -427,7 +428,7 @@ fn test_module_isolation() {
     let module_registry = runtime.module_registry.lock().unwrap();
 
     // Run modules concurrently (simulated)
-    let contexts = vec![
+    let contexts = [
         ModuleContext {
             session_id: "session_a".to_string(),
             user_id: "user_a".to_string(),

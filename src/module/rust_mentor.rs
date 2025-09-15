@@ -30,6 +30,10 @@ impl RustMentorModule {
     }
 }
 
+impl Default for RustMentorModule {
+    fn default() -> Self { Self::new() }
+}
+
 #[async_trait]
 pub trait SigilModule: Send + Sync {
     fn name(&self) -> &'static str;
@@ -102,10 +106,10 @@ impl SigilModule for RustMentorModule {
         }
 
         // 5) Post-validate output
-        if let Some(code) = extract_rust_block(&answer) {
-            if contains_forbidden_ast(&code)? {
-                return Err(AppError::forbidden("Output violates Rust safety policy"));
-            }
+        if let Some(code) = extract_rust_block(&answer)
+            && contains_forbidden_ast(&code)?
+        {
+            return Err(AppError::forbidden("Output violates Rust safety policy"));
         }
 
         // 6) Audit trail - simplified for now due to API differences
@@ -114,10 +118,10 @@ impl SigilModule for RustMentorModule {
         chain.add_suggestion(answer.clone());
         chain.set_verdict(Verdict::Allow);
         chain.set_trust_score(eval.score, eval.allowed);
-        chain.finalize_reasoning().map_err(|e| AppError::internal(e))?;
-        let frozen = FrozenChain::freeze_reasoning_chain(chain).map_err(|e| AppError::internal(e))?;
+        chain.finalize_reasoning().map_err(AppError::internal)?;
+        let frozen = FrozenChain::freeze_reasoning_chain(chain).map_err(AppError::internal)?;
         let rec = CanonicalRecord::from_frozen_chain(&frozen, user_id, "user", None)
-            .map_err(|e| AppError::internal(e))?;
+            .map_err(AppError::internal)?;
 
         // Persist module output to Canon store (sign-on-write via FrozenChain fields)
         {
@@ -126,7 +130,7 @@ impl SigilModule for RustMentorModule {
                 .lock()
                 .map_err(|e| AppError::internal(format!("canon store lock poisoned: {e}")))?;
             guard
-                .add_record(rec.clone(), &user_loa, false)
+                .add_record(rec.clone(), &LOA::Operator, false)
                 .map_err(|e| AppError::internal(format!("canon write failed: {e}")))?;
         }
 
@@ -168,10 +172,10 @@ impl<'ast> syn::visit::Visit<'ast> for ForbidVisitor {
     }
     
     fn visit_item_macro(&mut self, i: &'ast syn::ItemMacro) {
-        if let Some(ident) = i.mac.path.get_ident() {
-            if ident == "include" { 
-                self.found_forbidden = true; 
-            }
+        if let Some(ident) = i.mac.path.get_ident()
+            && ident == "include"
+        { 
+            self.found_forbidden = true; 
         }
     }
     

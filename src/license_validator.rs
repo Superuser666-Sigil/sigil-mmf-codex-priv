@@ -102,9 +102,8 @@ pub fn validate_license_content(
     // Try legacy/compat format first
     let parsed_legacy: Result<LicenseWrapper, toml::de::Error> = toml::from_str(content);
 
-    let mut license: SigilLicense;
-    if let Ok(wrapper) = parsed_legacy {
-        license = wrapper.license;
+    let license: SigilLicense = if let Ok(wrapper) = parsed_legacy {
+        wrapper.license
     } else {
         // Try sealed format: { license: Simple, seal: Seal }
         #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -154,7 +153,7 @@ pub fn validate_license_content(
             verifier: "license_validator".to_string(),
             canonicalized: true,
         };
-        license = SigilLicense {
+        SigilLicense {
             id: sealed.license.id.unwrap_or_else(|| "sealed-license".to_string()),
             issued_at: sealed.license.issued_at,
             expires_at: sealed.license.expires_at,
@@ -167,8 +166,8 @@ pub fn validate_license_content(
             trust,
             permissions,
             audit,
-        };
-    }
+        }
+    };
 
     let now = Utc::now();
     let mut score = 1.0;

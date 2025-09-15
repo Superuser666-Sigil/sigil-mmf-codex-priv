@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{
     api_errors::AppError, 
     app_state::AppState, 
-    security::{CurrentUser, extract_current_user_from_headers}, 
+    security::extract_current_user, 
     loa::LOA,
 };
 
@@ -25,7 +25,7 @@ pub async fn commit_system_proposal(
     headers: axum::http::HeaderMap,
     Json(req): Json<CommitRequest>,
 ) -> Result<(StatusCode, Json<CommitResponse>), AppError> {
-    let user: CurrentUser = extract_current_user_from_headers(&headers)?;
+    let user = extract_current_user(&headers, &st.runtime_id, &st.canon_fingerprint)?;
     if user.loa != LOA::Root {
         return Err(AppError::forbidden("only root can commit proposals"));
     }
@@ -34,7 +34,7 @@ pub async fn commit_system_proposal(
     let committed_proposal = {
         let mut qs = st.quorum.write().await;
         qs.commit_proposal(&req.proposal_id)
-            .map_err(|e| AppError::from(e))?
+            .map_err(AppError::from)?
     };
 
     // Rebuild and verify the canonical record that will be stored

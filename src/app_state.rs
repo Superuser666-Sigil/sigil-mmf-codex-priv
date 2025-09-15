@@ -23,6 +23,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         runtime_id: String,
         canon_fingerprint: String,
@@ -63,7 +64,7 @@ impl AppState {
             "system",
             payload,
             None,
-        )?;
+        ).map_err(anyhow::Error::msg)?;
 
         let mut guard = self
             .canon_store

@@ -55,8 +55,8 @@ impl ModuleRegistry {
         info!("Registered module: {}", name);
     }
 
-    pub fn get_module(&self, name: &str) -> Option<&Box<dyn SigilModule + Send + Sync>> {
-        self.modules.get(name)
+    pub fn get_module(&self, name: &str) -> Option<&(dyn SigilModule + Send + Sync)> {
+        self.modules.get(name).map(|b| &**b)
     }
 
     pub fn run_module(&self, name: &str, ctx: &ModuleContext) -> SigilResult<String> {
@@ -73,6 +73,12 @@ impl ModuleRegistry {
         }
 
         module.run(ctx)
+    }
+}
+
+impl Default for ModuleRegistry {
+    fn default() -> Self {
+        Self { modules: std::collections::HashMap::new() }
     }
 }
 
