@@ -1,21 +1,24 @@
 //! Canon record write/load/verify round-trip test
 
-use ed25519_dalek::{Signature, VerifyingKey, Verifier, Signer};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as B64;
+use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
 use mmf_sigil::{
     canon_store::CanonStore,
-    canon_store_sled::CanonStoreSled,
+    canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled,
     canonical_record::CanonicalRecord,
+    keys::KeyManager,
     loa::LOA,
 };
-use base64::engine::general_purpose::STANDARD as B64;
-use base64::Engine as _;
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
 #[test]
 fn canon_roundtrip_write_and_verify() {
     let tmp = TempDir::new().expect("tmp dir");
-    let mut store = CanonStoreSled::new(tmp.path().to_str().unwrap()).expect("sled store");
+    let enc_key = KeyManager::dev_key_for_testing().expect("encryption key");
+    let mut store = EncryptedCanonStoreSled::new(tmp.path().to_str().unwrap(), &enc_key)
+        .expect("encrypted sled store");
 
     // Create a simple record
     let payload = serde_json::json!({"k":"v"});
@@ -34,10 +37,14 @@ fn canon_roundtrip_write_and_verify() {
     record.pub_key = Some(B64.encode(verifying.as_bytes()));
 
     // Persist
-    store.add_record(record.clone(), &LOA::Operator, true).expect("add");
+    store
+        .add_record(record.clone(), &LOA::Operator, true)
+        .expect("add");
 
     // Load and verify
-    let loaded = store.load_record(&record.id, &LOA::Operator).expect("load some");
+    let loaded = store
+        .load_record(&record.id, &LOA::Operator)
+        .expect("load some");
     let canonical2 = loaded.to_canonical_json().expect("canonicalize");
     let digest2 = Sha256::digest(canonical2.as_bytes());
     assert_eq!(hex::encode(digest2), loaded.hash, "hash must match");
@@ -46,7 +53,7 @@ fn canon_roundtrip_write_and_verify() {
     let pk_bytes = B64.decode(loaded.pub_key.as_ref().unwrap()).unwrap();
     let verifying = VerifyingKey::from_bytes(&pk_bytes.try_into().unwrap()).unwrap();
     let signature = Signature::from_bytes(&sig_bytes.try_into().unwrap());
-    verifying.verify(canonical2.as_bytes(), &signature).expect("verify");
+    verifying
+        .verify(canonical2.as_bytes(), &signature)
+        .expect("verify");
 }
-
-

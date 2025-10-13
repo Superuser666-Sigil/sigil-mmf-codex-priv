@@ -1,20 +1,24 @@
-use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
+use axum::{
+    Json,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("{0}")] 
+    #[error("{0}")]
     BadRequest(String),
-    #[error("{0}")] 
+    #[error("{0}")]
     Unauthorized(String),
-    #[error("{0}")] 
+    #[error("{0}")]
     Forbidden(String),
-    #[error("{0}")] 
+    #[error("{0}")]
     NotFound(String),
-    #[error("{0}")] 
+    #[error("{0}")]
     Conflict(String),
-    #[error("{0}")] 
+    #[error("{0}")]
     Internal(String),
 }
 
@@ -22,31 +26,31 @@ impl AppError {
     pub fn bad_request(msg: impl Into<String>) -> Self {
         Self::BadRequest(msg.into())
     }
-    
+
     pub fn unauthorized(msg: impl Into<String>) -> Self {
         Self::Unauthorized(msg.into())
     }
-    
+
     pub fn forbidden(msg: impl Into<String>) -> Self {
         Self::Forbidden(msg.into())
     }
-    
+
     pub fn not_found(msg: impl Into<String>) -> Self {
         Self::NotFound(msg.into())
     }
-    
+
     pub fn conflict(msg: impl Into<String>) -> Self {
         Self::Conflict(msg.into())
     }
-    
+
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::Internal(msg.into())
     }
 }
 
 #[derive(Serialize)]
-struct ErrBody { 
-    error: String 
+struct ErrBody {
+    error: String,
 }
 
 impl IntoResponse for AppError {
@@ -82,9 +86,9 @@ impl From<crate::errors::SigilError> for AppError {
                 AppError::BadRequest(format!("Serialization {context} failed: {source}"))
             }
             crate::errors::SigilError::Auth { message } => AppError::Unauthorized(message),
-            crate::errors::SigilError::InsufficientLoa { required, actual } => {
-                AppError::Forbidden(format!("Insufficient LOA: required {required:?}, got {actual:?}"))
-            }
+            crate::errors::SigilError::InsufficientLoa { required, actual } => AppError::Forbidden(
+                format!("Insufficient LOA: required {required:?}, got {actual:?}"),
+            ),
             crate::errors::SigilError::Irl { message } => AppError::Internal(message),
             crate::errors::SigilError::Canon { operation, message } => {
                 AppError::Internal(format!("Canon {operation} failed: {message}"))

@@ -1,16 +1,16 @@
 use async_trait::async_trait;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::Client;
 use syn::File as SynFile;
-use once_cell::sync::Lazy;
 
 use crate::{
-    api_errors::AppError, 
-    loa::LOA, 
-    sigil_runtime_core::SigilRuntimeCore, 
-    audit::{AuditEvent},
-    audit_chain::{ReasoningChain, FrozenChain, Verdict},
+    api_errors::AppError,
+    audit::AuditEvent,
+    audit_chain::{FrozenChain, ReasoningChain, Verdict},
     canonical_record::CanonicalRecord,
+    loa::LOA,
+    sigil_runtime_core::SigilRuntimeCore,
 };
 
 pub struct RustMentorModule {
@@ -31,33 +31,50 @@ impl RustMentorModule {
 }
 
 impl Default for RustMentorModule {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
 pub trait SigilModule: Send + Sync {
     fn name(&self) -> &'static str;
     fn required_loa(&self) -> LOA;
-    async fn run(&self, input: String, session_id: &str, user_id: &str, rt: &SigilRuntimeCore)
-        -> Result<String, AppError>;
+    async fn run(
+        &self,
+        input: String,
+        session_id: &str,
+        user_id: &str,
+        rt: &SigilRuntimeCore,
+    ) -> Result<String, AppError>;
 }
 
 #[async_trait]
 impl SigilModule for RustMentorModule {
-    fn name(&self) -> &'static str { 
-        "rust_mentor" 
-    }
-    
-    fn required_loa(&self) -> LOA { 
-        LOA::Operator 
+    fn name(&self) -> &'static str {
+        "rust_mentor"
     }
 
-    async fn run(&self, input: String, session_id: &str, user_id: &str, rt: &SigilRuntimeCore)
-        -> Result<String, AppError>
-    {
+    fn required_loa(&self) -> LOA {
+        LOA::Operator
+    }
+
+    async fn run(
+        &self,
+        input: String,
+        session_id: &str,
+        user_id: &str,
+        rt: &SigilRuntimeCore,
+    ) -> Result<String, AppError> {
         // 1) Trust check - create a mock LOA for now since we don't have access to the user's LOA
         let user_loa = LOA::Operator; // This should come from the runtime context
-        let event = AuditEvent::new(user_id, "module_run", Some("rust_mentor"), session_id, &user_loa);
+        let event = AuditEvent::new(
+            user_id,
+            "module_run",
+            Some("rust_mentor"),
+            session_id,
+            &user_loa,
+        );
         let eval = rt.evaluate_event(&event, 0); // Pass 0 for recent_requests
         if !eval.allowed {
             // rt.audit_deny(&event).ok(); // Method doesn't exist, skip for now
@@ -87,20 +104,31 @@ impl SigilModule for RustMentorModule {
             ],
             "max_tokens": 600
         });
-        let url = std::env::var("LLM_URL").unwrap_or_else(|_| "https://api.openai.com/v1/chat/completions".into());
-        let key = std::env::var("LLM_API_KEY").map_err(|_| AppError::internal("missing LLM_API_KEY"))?;
+        let url = std::env::var("LLM_URL")
+            .unwrap_or_else(|_| "https://api.openai.com/v1/chat/completions".into());
+        let key =
+            std::env::var("LLM_API_KEY").map_err(|_| AppError::internal("missing LLM_API_KEY"))?;
 
-        let resp = self.http.post(url)
+        let resp = self
+            .http
+            .post(url)
             .bearer_auth(key)
             .json(&body)
-            .send().await
+            .send()
+            .await
             .map_err(|_| AppError::internal("LLM request failed"))?;
 
         if !resp.status().is_success() {
             return Err(AppError::internal("LLM backend error"));
         }
-        let json: serde_json::Value = resp.json().await.map_err(|_| AppError::internal("LLM JSON error"))?;
-        let answer = json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string();
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|_| AppError::internal("LLM JSON error"))?;
+        let answer = json["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         if answer.is_empty() {
             return Err(AppError::internal("Empty LLM response"));
         }
@@ -154,7 +182,7 @@ fn extract_rust_block(txt: &str) -> Option<String> {
     // extract first ```rust ... ``` fenced block, else None
     let fence = "```rust";
     if let Some(start) = txt.find(fence) {
-        let rest = &txt[start+fence.len()..];
+        let rest = &txt[start + fence.len()..];
         if let Some(end) = rest.find("```") {
             return Some(rest[..end].to_string());
         }
@@ -162,32 +190,34 @@ fn extract_rust_block(txt: &str) -> Option<String> {
     None
 }
 
-struct ForbidVisitor { 
-    found_forbidden: bool 
+struct ForbidVisitor {
+    found_forbidden: bool,
 }
 
 impl<'ast> syn::visit::Visit<'ast> for ForbidVisitor {
-    fn visit_item_foreign_mod(&mut self, _i: &'ast syn::ItemForeignMod) { 
-        self.found_forbidden = true; 
+    fn visit_item_foreign_mod(&mut self, _i: &'ast syn::ItemForeignMod) {
+        self.found_forbidden = true;
     }
-    
+
     fn visit_item_macro(&mut self, i: &'ast syn::ItemMacro) {
         if let Some(ident) = i.mac.path.get_ident()
             && ident == "include"
-        { 
-            self.found_forbidden = true; 
+        {
+            self.found_forbidden = true;
         }
     }
-    
-    fn visit_expr_unsafe(&mut self, _i: &'ast syn::ExprUnsafe) { 
-        self.found_forbidden = true; 
+
+    fn visit_expr_unsafe(&mut self, _i: &'ast syn::ExprUnsafe) {
+        self.found_forbidden = true;
     }
 }
 
 fn contains_forbidden_ast(code: &str) -> Result<bool, AppError> {
-    let file: SynFile = syn::parse_file(code)
-        .map_err(|_| AppError::bad_request("Invalid Rust code block"))?;
-    let mut v = ForbidVisitor { found_forbidden: false };
+    let file: SynFile =
+        syn::parse_file(code).map_err(|_| AppError::bad_request("Invalid Rust code block"))?;
+    let mut v = ForbidVisitor {
+        found_forbidden: false,
+    };
     syn::visit::Visit::visit_file(&mut v, &file);
     Ok(v.found_forbidden)
 }

@@ -262,7 +262,7 @@ mod tests {
     fn create_test_quorum_system() -> (QuorumSystem, TempDir, SigningKey, String) {
         let temp_dir = TempDir::new().unwrap();
         let store_path = temp_dir.path().join("test_canon.db");
-        let encryption_key = KeyManager::get_encryption_key().unwrap();
+        let encryption_key = KeyManager::dev_key_for_testing().expect("test encryption key");
         let canon_store = Arc::new(std::sync::Mutex::new(
             EncryptedCanonStoreSled::new(store_path.to_str().unwrap(), &encryption_key).unwrap(),
         ));

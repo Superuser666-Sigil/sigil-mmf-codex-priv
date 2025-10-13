@@ -1,28 +1,25 @@
-use axum::{extract::State, Json, http::StatusCode};
+use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
-use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use std::sync::Arc;
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::{
-    app_state::AppState, 
-    security::extract_current_user, 
-    loa::LOA, 
-    api_errors::AppError,
-    canonical_record::CanonicalRecord,
+    api_errors::AppError, app_state::AppState, canonical_record::CanonicalRecord, loa::LOA,
+    security::extract_current_user,
 };
 
 #[derive(Deserialize)]
-pub struct MemoryWriteReq { 
-    key: String, 
-    text: String, 
+pub struct MemoryWriteReq {
+    key: String,
+    text: String,
     #[allow(dead_code)]
-    session_id: String 
+    session_id: String,
 }
 
 #[derive(Serialize)]
-pub struct MemoryWriteResp { 
-    success: bool, 
-    id: String 
+pub struct MemoryWriteResp {
+    success: bool,
+    id: String,
 }
 
 pub async fn memory_write(
@@ -38,7 +35,9 @@ pub async fn memory_write(
         return Err(AppError::bad_request("invalid memory payload"));
     }
 
-    let now = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
+    let now = OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .map_err(|e| AppError::internal(format!("failed to format timestamp: {e}")))?;
     let payload = serde_json::json!({
         "schema_version": 1,
         "key": format!("mem::{}::{}", user.user_id, req.key),
@@ -56,25 +55,37 @@ pub async fn memory_write(
         "user",
         payload,
         None,
-    ).map_err(|e| AppError::internal(format!("Failed to create signed record: {e}")))?;
+    )
+    .map_err(|e| AppError::internal(format!("Failed to create signed record: {e}")))?;
 
     // Persist to Canon Store
-    let mut canon_store = _st.canon_store.lock().map_err(|e| AppError::internal(format!("canon store lock poisoned: {e}")))?;
+    let mut canon_store = _st
+        .canon_store
+        .lock()
+        .map_err(|e| AppError::internal(format!("canon store lock poisoned: {e}")))?;
     canon_store
         .add_record(rec.clone(), &user.loa, false)
         .map_err(|e| AppError::internal(format!("Failed to add record: {e}")))?;
 
-    tracing::info!("Memory write: user={}, key={}, record_id={}", user.user_id, req.key, record_id);
+    tracing::info!(
+        "Memory write: user={}, key={}, record_id={}",
+        user.user_id,
+        req.key,
+        record_id
+    );
 
-    Ok((StatusCode::OK, Json(MemoryWriteResp { 
-        success: true, 
-        id: rec.id 
-    })))
+    Ok((
+        StatusCode::OK,
+        Json(MemoryWriteResp {
+            success: true,
+            id: rec.id,
+        }),
+    ))
 }
 
 #[derive(Serialize)]
-pub struct MemoryListItem { 
-    id: String, 
+pub struct MemoryListItem {
+    id: String,
     ts: String,
     key: String,
 }
@@ -142,7 +153,9 @@ pub async fn rag_upsert(
         return Err(AppError::bad_request("document too large"));
     }
 
-    let now = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
+    let now = OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .map_err(|e| AppError::internal(format!("failed to format timestamp: {e}")))?;
     let payload = serde_json::json!({
         "schema_version": 1,
         "doc_id": format!("rag::{}::{}", user.user_id, req.doc_id),
@@ -155,25 +168,31 @@ pub async fn rag_upsert(
 
     // Create properly signed CanonicalRecord
     let record_id = format!("rag_{}_{}", user.user_id, req.doc_id);
-    let rec = CanonicalRecord::new_signed(
-        "rag_doc",
-        &record_id,
-        &user.user_id,
-        "user",
-        payload,
-        None,
-    ).map_err(|e| AppError::internal(format!("Failed to create signed record: {e}")))?;
+    let rec =
+        CanonicalRecord::new_signed("rag_doc", &record_id, &user.user_id, "user", payload, None)
+            .map_err(|e| AppError::internal(format!("Failed to create signed record: {e}")))?;
 
     // Persist to Canon Store
-    let mut canon_store = _st.canon_store.lock().map_err(|e| AppError::internal(format!("canon store lock poisoned: {e}")))?;
+    let mut canon_store = _st
+        .canon_store
+        .lock()
+        .map_err(|e| AppError::internal(format!("canon store lock poisoned: {e}")))?;
     canon_store
         .add_record(rec.clone(), &user.loa, false)
         .map_err(|e| AppError::internal(format!("Failed to add record: {e}")))?;
 
-    tracing::info!("RAG upsert: user={}, doc_id={}, record_id={}", user.user_id, req.doc_id, record_id);
+    tracing::info!(
+        "RAG upsert: user={}, doc_id={}, record_id={}",
+        user.user_id,
+        req.doc_id,
+        record_id
+    );
 
-    Ok((StatusCode::OK, Json(RagUpsertResp {
-        success: true,
-        doc_id: req.doc_id,
-    })))
+    Ok((
+        StatusCode::OK,
+        Json(RagUpsertResp {
+            success: true,
+            doc_id: req.doc_id,
+        }),
+    ))
 }

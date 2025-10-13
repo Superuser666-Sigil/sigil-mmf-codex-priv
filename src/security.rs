@@ -9,7 +9,9 @@ pub struct CurrentUser {
 }
 
 // Simple header-based extractor helper used directly in handlers (dev only)
-pub fn extract_current_user_from_headers(headers: &axum::http::HeaderMap) -> Result<CurrentUser, crate::api_errors::AppError> {
+pub fn extract_current_user_from_headers(
+    headers: &axum::http::HeaderMap,
+) -> Result<CurrentUser, crate::api_errors::AppError> {
     let uid = headers
         .get("x-user-id")
         .and_then(|v| v.to_str().ok())
@@ -59,17 +61,26 @@ pub fn extract_current_user(
 ) -> Result<CurrentUser, crate::api_errors::AppError> {
     // Try header first
     if let Some(lh) = headers.get("x-sigil-license").and_then(|v| v.to_str().ok()) {
-        match crate::license_validator::validate_license_content(lh, runtime_id, canon_fingerprint) {
+        match crate::license_validator::validate_license_content(lh, runtime_id, canon_fingerprint)
+        {
             Ok(v) if v.valid => {
                 let session_id = headers
                     .get("x-session-id")
                     .and_then(|v| v.to_str().ok())
                     .unwrap_or("default")
                     .to_string();
-                return Ok(CurrentUser { user_id: v.license.owner.hash_id, loa: v.license.loa, session_id });
+                return Ok(CurrentUser {
+                    user_id: v.license.owner.hash_id,
+                    loa: v.license.loa,
+                    session_id,
+                });
             }
             Ok(_) => return Err(crate::api_errors::AppError::unauthorized("invalid license")),
-            Err(_) => return Err(crate::api_errors::AppError::unauthorized("malformed license")),
+            Err(_) => {
+                return Err(crate::api_errors::AppError::unauthorized(
+                    "malformed license",
+                ));
+            }
         }
     }
 
@@ -81,26 +92,39 @@ pub fn extract_current_user(
             let end = after.find(';').unwrap_or(after.len());
             let value = &after[..end];
             // value may be URL-encoded; try as-is first
-            match crate::license_validator::validate_license_content(value, runtime_id, canon_fingerprint) {
+            match crate::license_validator::validate_license_content(
+                value,
+                runtime_id,
+                canon_fingerprint,
+            ) {
                 Ok(v) if v.valid => {
                     let session_id = headers
                         .get("x-session-id")
                         .and_then(|v| v.to_str().ok())
                         .unwrap_or("default")
                         .to_string();
-                    return Ok(CurrentUser { user_id: v.license.owner.hash_id, loa: v.license.loa, session_id });
+                    return Ok(CurrentUser {
+                        user_id: v.license.owner.hash_id,
+                        loa: v.license.loa,
+                        session_id,
+                    });
                 }
                 Ok(_) => return Err(crate::api_errors::AppError::unauthorized("invalid license")),
-                Err(_) => return Err(crate::api_errors::AppError::unauthorized("malformed license")),
+                Err(_) => {
+                    return Err(crate::api_errors::AppError::unauthorized(
+                        "malformed license",
+                    ));
+                }
             }
         }
     }
 
-    // Dev fallback controlled by env
-    // Default to disabled for production-hardening; opt-in via MMF_DEV_HEADER_AUTH=true
-    let dev_ok = std::env::var("MMF_DEV_HEADER_AUTH")
+    // Dev fallback controlled by compile-time feature and env var
+    // Requires both: feature "dev-auth" and MMF_DEV_HEADER_AUTH=true
+    let dev_ok_env = std::env::var("MMF_DEV_HEADER_AUTH")
         .map(|v| v.to_lowercase() == "true")
         .unwrap_or(false);
+    let dev_ok = cfg!(feature = "dev-auth") && dev_ok_env;
     if dev_ok {
         return extract_current_user_from_headers(headers);
     }

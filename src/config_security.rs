@@ -100,11 +100,12 @@ impl SecureConfig {
 
             // Ensure audit log directory exists
             if let Some(parent) = Path::new(&audit_log).parent()
-                && !parent.exists() {
-                    errors.push(format!(
-                        "Audit log directory '{}' does not exist",
-                        parent.display()
-                    ));
+                && !parent.exists()
+            {
+                errors.push(format!(
+                    "Audit log directory '{}' does not exist",
+                    parent.display()
+                ));
             }
         }
 

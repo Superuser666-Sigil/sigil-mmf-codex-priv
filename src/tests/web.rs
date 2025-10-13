@@ -20,7 +20,7 @@ async fn trust_check_returns_200_on_valid_payload() {
     // Create an in-memory Canon store for the runtime
     let temp_dir = tempfile::tempdir().expect("temp dir should be created");
     let path = temp_dir.path().to_str().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("encryption key");
     let store = EncryptedCanonStoreSled::new(path, &encryption_key)
         .expect("should create encrypted canon store");
     let core = SigilRuntimeCore::new(LOA::Observer, Arc::new(Mutex::new(store)), RuntimeConfig::default()).expect("runtime init");
@@ -50,7 +50,7 @@ async fn trust_check_returns_200_on_valid_payload() {
 async fn trust_check_rejects_malformed_loa() {
     let temp_dir = tempfile::tempdir().expect("temp dir should be created");
     let path = temp_dir.path().to_str().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("encryption key");
     let store = EncryptedCanonStoreSled::new(path, &encryption_key)
         .expect("should create encrypted canon store");
     let core = SigilRuntimeCore::new(LOA::Observer, Arc::new(Mutex::new(store)), RuntimeConfig::default()).expect("runtime init");
@@ -80,3 +80,4 @@ async fn trust_check_rejects_malformed_loa() {
     // The new API includes an error field; ensure it is present
     assert!(json_val.get("error").is_some());
 }
+

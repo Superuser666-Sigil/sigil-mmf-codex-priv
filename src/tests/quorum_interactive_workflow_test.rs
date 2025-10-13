@@ -28,7 +28,7 @@ fn test_interactive_quorum_workflow_full_cycle() {
     let temp_dir = TempDir::new().expect("should create temp dir");
     let path = temp_dir.path().to_str().expect("temp path should be valid");
 
-    let encryption_key = KeyManager::get_encryption_key().expect("should get encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("should get encryption key");
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(path, &encryption_key).expect("should create encrypted store"),
     ));
@@ -360,7 +360,7 @@ fn test_proposal_status_tracking() {
     let temp_dir = TempDir::new().expect("should create temp dir");
     let path = temp_dir.path().to_str().expect("temp path should be valid");
 
-    let encryption_key = KeyManager::get_encryption_key().expect("should get encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("should get encryption key");
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(path, &encryption_key).expect("should create encrypted store"),
     ));
@@ -492,7 +492,7 @@ fn test_partial_quorum_failure_scenarios() {
     let temp_dir = TempDir::new().expect("should create temp dir");
     let path = temp_dir.path().to_str().expect("temp path should be valid");
 
-    let encryption_key = KeyManager::get_encryption_key().expect("should get encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("should get encryption key");
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(path, &encryption_key).expect("should create encrypted store"),
     ));

@@ -4,8 +4,8 @@ use crate::keys::KeyManager;
 use base64::Engine;
 use rand;
 use sha2::Digest;
-use tempfile::TempDir;
 use temp_env;
+use tempfile::TempDir;
 use tracing::info;
 
 #[test]
@@ -23,12 +23,16 @@ fn test_key_manager_integration() {
     // Safe environment variable management using temp_env
     temp_env::with_vars(
         vec![
-            ("CANON_KEY_DIR", Some(custom_key_dir.to_str().expect("utf-8 path"))),
+            (
+                "CANON_KEY_DIR",
+                Some(custom_key_dir.to_str().expect("utf-8 path")),
+            ),
             ("CANON_ENCRYPTION_KEY", Some(&encryption_key_b64)),
         ],
         || {
             // Test KeyManager methods
-            let retrieved_key = KeyManager::get_encryption_key().expect("should get encryption key");
+            let retrieved_key =
+                KeyManager::dev_key_for_testing().expect("should get encryption key");
             assert_eq!(
                 retrieved_key, test_encryption_key,
                 "should use environment key"
@@ -63,4 +67,4 @@ fn create_test_encryption_key(unique_id: &str) -> [u8; 32] {
     let hash = sha2::Sha256::digest(seed.as_bytes());
     key.copy_from_slice(&hash[..32]);
     key
-} 
+}

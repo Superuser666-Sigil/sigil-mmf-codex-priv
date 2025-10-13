@@ -33,17 +33,15 @@ impl CSRFProtection {
 
     /// Validate a CSRF token for a session
     pub async fn validate_token(&self, session_id: &str, token: &str) -> bool {
-        let tokens = self.tokens.write().await;
+        let tokens = self.tokens.read().await;
         let now = Instant::now();
 
-        if let Some((stored_token, created)) = tokens.get(session_id)
-            && stored_token == token
-            && now.duration_since(*created) < self.token_lifetime
-        {
-            return true;
-        }
-
-        false
+        matches!(
+            tokens.get(session_id),
+            Some((stored_token, created))
+                if stored_token == token
+                    && now.duration_since(*created) < self.token_lifetime
+        )
     }
 
     /// Invalidate a CSRF token (use after successful validation)

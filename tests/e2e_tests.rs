@@ -18,8 +18,9 @@ use tower::ServiceExt;
 
 use mmf_sigil::{
     audit_chain::{FrozenChain, ReasoningChain, Verdict},
-    canon_store_sled::CanonStoreSled,
+    canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled,
     canonical_record::CanonicalRecord,
+    keys::KeyManager,
     license_validator::validate_license,
     loa::LOA,
     runtime_config::{EnforcementMode, RuntimeConfig},
@@ -29,10 +30,12 @@ use mmf_sigil::{
 
 /// Create a test runtime with specified LOA and temporary storage
 async fn create_test_runtime(loa: LOA) -> (Arc<RwLock<SigilRuntimeCore>>, TempDir) {
+    KeyManager::install_dev_encryption_key_for_testing();
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("encryption key");
     let canon_store = Arc::new(Mutex::new(
-        CanonStoreSled::new(temp_dir.path().to_str().unwrap())
-            .expect("Failed to create Canon store"),
+        EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key)
+            .expect("Failed to create encrypted Canon store"),
     ));
 
     let config = RuntimeConfig {

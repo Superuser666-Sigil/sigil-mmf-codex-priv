@@ -1,15 +1,15 @@
+use crate::audit::{AuditEvent, LogLevel};
 use crate::canon_store::CanonStore;
 use crate::canonical_record::CanonicalRecord;
 use crate::loa::{LOA, can_read_canon, can_write_canon};
-use crate::audit::{AuditEvent, LogLevel};
+use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use chrono::{DateTime, Utc};
+use ed25519_dalek::Verifier;
 use serde_json;
+use sha2::Digest;
 use sled::Db;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-use ed25519_dalek::Verifier;
-use sha2::Digest;
 
 /// Database audit event for tracking access
 #[derive(Debug, Clone)]
@@ -154,23 +154,29 @@ impl CanonStoreSled {
         if sig_bytes.len() != 64 {
             return Err("invalid signature length");
         }
-        let signature = ed25519_dalek::Signature::from_bytes(sig_bytes.as_slice().try_into().map_err(|_| "sig bytes")?);
+        let signature = ed25519_dalek::Signature::from_bytes(
+            sig_bytes.as_slice().try_into().map_err(|_| "sig bytes")?,
+        );
 
         let pk_bytes = B64.decode(pk_b64).map_err(|_| "invalid pubkey b64")?;
         if pk_bytes.len() != 32 {
             return Err("invalid pubkey length");
         }
-        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(pk_bytes.as_slice().try_into().map_err(|_| "pk bytes")?)
-            .map_err(|_| "invalid verifying key")?;
+        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(
+            pk_bytes.as_slice().try_into().map_err(|_| "pk bytes")?,
+        )
+        .map_err(|_| "invalid verifying key")?;
 
         // Accept signature either over canonical json bytes (preferred) or over the hash bytes (compat)
-        let mut ok = verifying_key.verify(canonical_json.as_bytes(), &signature).is_ok();
-        if !ok
-            && let Ok(hash_bytes) = hex::decode(&record.hash)
-        {
+        let mut ok = verifying_key
+            .verify(canonical_json.as_bytes(), &signature)
+            .is_ok();
+        if !ok && let Ok(hash_bytes) = hex::decode(&record.hash) {
             ok = verifying_key.verify(&hash_bytes, &signature).is_ok();
         }
-        if !ok { return Err("signature verification failed"); }
+        if !ok {
+            return Err("signature verification failed");
+        }
         Ok(())
     }
 }

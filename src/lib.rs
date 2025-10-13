@@ -8,10 +8,11 @@ pub mod errors;
 pub mod crypto;
 
 // API infrastructure
-pub mod api_errors;
-pub mod security;
-pub mod app_state;
 pub mod api;
+pub mod api_errors;
+pub mod app_state;
+pub mod security;
+pub mod loa_policy;
 
 // Module system
 pub mod module;
@@ -64,8 +65,8 @@ pub mod config_security;
 pub mod sigilctl;
 
 // Web server interface
-pub mod sigilweb;
 pub mod enhanced_web;
+pub mod sigilweb;
 
 // Backup & recovery
 pub mod backup_recovery;
@@ -107,19 +108,6 @@ pub mod witness_registry;
 // Logging
 pub mod log_sink;
 
-#[cfg(test)]
-mod tests {
-    pub mod audit_chain_test;
-    pub mod canon_store;
-    pub mod key_lifecycle_test;
-    pub mod module_execution_comprehensive_test;
-    pub mod module_integration_test;
-    pub mod module_tests;
-    pub mod quorum_enforcement_test;
-    pub mod quorum_interactive_workflow_test;
-    pub mod security_tests;
-}
-
 // Re-export key types for the two-phase ReasoningChain -> FrozenChain approach
 pub use audit_chain::{
     CryptographicWitness, // Cryptographic verification
@@ -134,3 +122,16 @@ pub use audit_chain::{
 };
 
 pub use audit_store::AuditStore; // Storage for both phases
+
+#[cfg(test)]
+mod tests {
+    pub mod audit_chain_test;
+    pub mod canon_store;
+    pub mod key_lifecycle_test;
+    pub mod module_execution_comprehensive_test;
+    pub mod module_integration_test;
+    pub mod module_tests;
+    pub mod quorum_enforcement_test;
+    pub mod quorum_interactive_workflow_test;
+    pub mod security_tests;
+}

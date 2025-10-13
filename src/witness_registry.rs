@@ -5,7 +5,7 @@
 
 use crate::canon_store::CanonStore;
 use crate::canonical_record::CanonicalRecord;
-use crate::errors::{SigilError, SigilResult};
+use crate::errors::{SafeReadLock, SigilError, SigilResult};
 use crate::loa::LOA;
 use base64::Engine;
 use chrono::{DateTime, Utc};
@@ -93,7 +93,10 @@ impl WitnessRegistry {
         }
 
         // Validate public key format (basic check for base64)
-        if base64::engine::general_purpose::STANDARD.decode(&public_key).is_err() {
+        if base64::engine::general_purpose::STANDARD
+            .decode(&public_key)
+            .is_err()
+        {
             return Err(SigilError::invalid_input(
                 "add_witness",
                 "Invalid base64 public key",
@@ -162,19 +165,15 @@ impl WitnessRegistry {
     }
 
     /// List all active trusted witnesses
-    pub fn list_active_witnesses(&self) -> Vec<TrustedWitness> {
-        self.cache
-            .read()
-            .map(|cache| cache.values().filter(|w| w.is_active).cloned().collect())
-            .unwrap_or_default()
+    pub fn list_active_witnesses(&self) -> SigilResult<Vec<TrustedWitness>> {
+        let cache = self.cache.safe_read()?;
+        Ok(cache.values().filter(|w| w.is_active).cloned().collect())
     }
 
     /// Check if a witness is trusted and active
-    pub fn is_trusted_witness(&self, witness_id: &str) -> bool {
-        self.cache
-            .read()
-            .map(|cache| cache.get(witness_id).map(|w| w.is_active).unwrap_or(false))
-            .unwrap_or(false)
+    pub fn is_trusted_witness(&self, witness_id: &str) -> SigilResult<bool> {
+        let cache = self.cache.safe_read()?;
+        Ok(cache.get(witness_id).map(|w| w.is_active).unwrap_or(false))
     }
 
     /// Validate a witness signature using Ed25519 cryptographic verification
@@ -315,7 +314,7 @@ mod tests {
 
     fn create_test_registry() -> (WitnessRegistry, TempDir) {
         let temp_dir = TempDir::new().unwrap();
-        let encryption_key = KeyManager::get_encryption_key().unwrap();
+        let encryption_key = KeyManager::dev_key_for_testing().expect("test encryption key");
         let canon_store = Arc::new(Mutex::new(
             EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key)
                 .unwrap(),
@@ -337,7 +336,7 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        assert!(registry.is_trusted_witness("witness1"));
+        assert!(registry.is_trusted_witness("witness1").unwrap());
     }
 
     #[test]
@@ -370,12 +369,12 @@ mod tests {
             )
             .unwrap();
 
-        assert!(registry.is_trusted_witness("witness1"));
+        assert!(registry.is_trusted_witness("witness1").unwrap());
 
         // Remove the witness
         registry.remove_witness("witness1", &LOA::Root).unwrap();
 
-        assert!(!registry.is_trusted_witness("witness1"));
+        assert!(!registry.is_trusted_witness("witness1").unwrap());
     }
 
     #[test]
@@ -403,13 +402,13 @@ mod tests {
             )
             .unwrap();
 
-        let active_witnesses = registry.list_active_witnesses();
+        let active_witnesses = registry.list_active_witnesses().unwrap();
         assert_eq!(active_witnesses.len(), 2);
 
         // Remove one witness
         registry.remove_witness("witness1", &LOA::Root).unwrap();
 
-        let active_witnesses = registry.list_active_witnesses();
+        let active_witnesses = registry.list_active_witnesses().unwrap();
         assert_eq!(active_witnesses.len(), 1);
         assert_eq!(active_witnesses[0].witness_id, "witness2");
     }

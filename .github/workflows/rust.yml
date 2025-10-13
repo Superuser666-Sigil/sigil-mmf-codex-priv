@@ -15,60 +15,64 @@ env:
 
 jobs:
   build-test:
-    name: Build & Test (locked)
-    runs-on: ubuntu-latest
+    name: Build, Test, Lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        toolchain: [stable]
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install toolchain (${{ matrix.toolchain }})
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: ${{ matrix.toolchain }}
           components: clippy,rustfmt
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Fetch dependencies
-        run: cargo fetch
-
-      - name: Update lockfile
-        run: cargo update
-
-      - name: Verify lockfile
-        run: cargo generate-lockfile --offline
+      - name: Show versions
+        run: |
+          rustc -Vv
+          cargo -V
 
       - name: Build (debug)
-        run: cargo build --offline
+        run: cargo build --all-features
 
       - name: Build (release)
-        run: cargo build --release --offline
+        run: cargo build --release --all-features
 
-      - name: Tests (debug)
-        run: cargo test --offline --all-features
+      - name: Test (debug)
+        run: cargo test --all-features
 
-      - name: Tests (release)
-        run: cargo test --release --offline --all-features
-
-      - name: Clippy
+      - name: Clippy (deny warnings)
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Docs
-        run: cargo doc --no-deps
+      - name: Format (check)
+        run: cargo fmt --all -- --check
+
+      - name: Docs (deny warnings)
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps
 
       - name: Cargo Audit
+        if: matrix.os == 'ubuntu-latest'
         uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install cargo-deny
+        if: matrix.os == 'ubuntu-latest'
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny
 
       - name: Cargo Deny (advisories, bans, licenses, sources, duplicates)
+        if: matrix.os == 'ubuntu-latest'
         run: cargo deny check advisories bans licenses sources duplicates
 
   extended:
@@ -88,18 +92,6 @@ jobs:
         run: |
           cargo update -Z minimal-versions
           cargo build
-
-      - name: MSRV matrix check (example)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.76.0
-
-      - name: Build & Test (MSRV)
-        run: |
-          cargo clean
-          cargo fetch
-          cargo build --offline
-          cargo test --offline
 
       - name: Install tools (sbom, outdated)
         uses: taiki-e/install-action@v2

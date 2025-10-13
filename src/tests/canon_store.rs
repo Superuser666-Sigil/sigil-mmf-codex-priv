@@ -1,8 +1,8 @@
 // tests/canon_store.rs
 use crate::canon_store::CanonStore;
 use crate::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
-use crate::keys::KeyManager;
 use crate::canonical_record::CanonicalRecord;
+use crate::keys::KeyManager;
 use crate::loa::LOA;
 use crate::trusted_knowledge::TrustedKnowledgeEntry;
 
@@ -16,7 +16,7 @@ pub fn write_and_read_entry_roundtrip() {
         .to_str()
         .expect("temp path should be valid UTF-8");
 
-    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("encryption key");
     let mut store = EncryptedCanonStoreSled::new(path, &encryption_key)
         .expect("should be able to create encrypted CanonStore");
     let id = "unit_test_doc";
@@ -56,7 +56,7 @@ pub fn reject_read_without_permission() {
         .to_str()
         .expect("temp path should be valid UTF-8");
 
-    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("encryption key");
     let mut store = EncryptedCanonStoreSled::new(path, &encryption_key)
         .expect("should be able to create encrypted CanonStore");
 
@@ -139,7 +139,7 @@ fn concurrent_writes_encrypted_store() {
         .to_str()
         .expect("temp path should be valid UTF-8");
 
-    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("encryption key");
     let store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(path, &encryption_key)
             .expect("should be able to create encrypted CanonStore"),
@@ -169,14 +169,14 @@ fn concurrent_writes_encrypted_store() {
                 )
                 .expect("signed record");
                 let mut guard = store_cloned.lock().unwrap();
-                guard
-                    .add_record(rec, &LOA::Operator, false)
-                    .expect("write");
+                guard.add_record(rec, &LOA::Operator, false).expect("write");
             }
         }));
     }
 
-    for h in handles { h.join().expect("join"); }
+    for h in handles {
+        h.join().expect("join");
+    }
 
     let guard = store.lock().unwrap();
     let records = guard.list_records(Some("memory_block"), &LOA::Operator);
@@ -193,7 +193,7 @@ fn crash_recovery_persists_records() {
     // Write a record, drop store, reopen, and ensure it still exists
     let temp_dir = tempdir().expect("temp dir");
     let path = temp_dir.path().to_str().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().expect("encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("encryption key");
 
     {
         let mut store = EncryptedCanonStoreSled::new(path, &encryption_key).expect("open store");
@@ -211,9 +211,7 @@ fn crash_recovery_persists_records() {
             None,
         )
         .expect("signed record");
-        store
-            .add_record(rec, &LOA::Operator, false)
-            .expect("write");
+        store.add_record(rec, &LOA::Operator, false).expect("write");
         // store dropped here
     }
 
@@ -244,7 +242,7 @@ fn test_canon_write_verify_round_trip_with_quorum() {
 
     // Use proper key management for encryption key
     let encryption_key =
-        KeyManager::get_encryption_key().expect("should be able to get encryption key");
+        KeyManager::dev_key_for_testing().expect("should be able to get encryption key");
 
     // Use encrypted store with proper key management
     let canon_store = Arc::new(Mutex::new(

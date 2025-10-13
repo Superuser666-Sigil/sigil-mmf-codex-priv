@@ -31,12 +31,13 @@ fn jcs_basic_key_order_and_numbers() {
 
     let canonical = record.to_canonical_json().expect("canonicalize");
     // Keys should be lexicographically ordered; arrays preserved; numbers and unicode stable
-    assert!(canonical.find("\"a\"").is_some());
-    assert!(canonical.find("\"b\"").is_some());
-    assert!(canonical.find("\"nested\"").is_some());
+    assert!(canonical.contains("\"a\""));
+    assert!(canonical.contains("\"b\""));
+    assert!(canonical.contains("\"nested\""));
     let a_pos = canonical.find("\"a\"").unwrap();
     let b_pos = canonical.find("\"b\"").unwrap();
-    assert!(a_pos < b_pos, "keys must be sorted lexicographically in canonical JSON");
+    assert!(
+        a_pos < b_pos,
+        "keys must be sorted lexicographically in canonical JSON"
+    );
 }
-
-

@@ -2,10 +2,10 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 
 use crate::{
-    quorum_system::{QuorumSystem, SystemProposal}, 
     canon_store::CanonStore,
     canonical_record::CanonicalRecord,
     crypto::KeyStore,
+    quorum_system::{QuorumSystem, SystemProposal},
     sigil_runtime_core::SigilRuntimeCore,
 };
 
@@ -35,7 +35,7 @@ impl AppState {
         runtime_core: Arc<RwLock<SigilRuntimeCore>>,
     ) -> Self {
         let key_store = KeyStore::new(&key_dir);
-        
+
         Self {
             runtime_id,
             canon_fingerprint,
@@ -64,7 +64,8 @@ impl AppState {
             "system",
             payload,
             None,
-        ).map_err(anyhow::Error::msg)?;
+        )
+        .map_err(anyhow::Error::msg)?;
 
         let mut guard = self
             .canon_store
@@ -77,9 +78,10 @@ impl AppState {
         Ok(())
     }
 
-    pub fn rebuild_canonical_record_from_proposal(&self, prop: &SystemProposal)
-        -> anyhow::Result<CanonicalRecord>
-    {
+    pub fn rebuild_canonical_record_from_proposal(
+        &self,
+        prop: &SystemProposal,
+    ) -> anyhow::Result<CanonicalRecord> {
         // Create properly signed CanonicalRecord from proposal
         let payload = serde_json::json!({
             "entry": prop.entry,
@@ -98,7 +100,8 @@ impl AppState {
             "system",
             payload,
             None,
-        ).map_err(|e| anyhow::anyhow!("Failed to create signed record: {e}"))?;
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to create signed record: {e}"))?;
 
         Ok(record)
     }

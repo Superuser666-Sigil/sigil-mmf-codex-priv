@@ -2,22 +2,17 @@ use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::{
-    api_errors::AppError, 
-    app_state::AppState, 
-    security::extract_current_user, 
-    loa::LOA,
-};
+use crate::{api_errors::AppError, app_state::AppState, loa::LOA, security::extract_current_user};
 
 #[derive(Deserialize)]
-pub struct CommitRequest { 
-    proposal_id: String 
+pub struct CommitRequest {
+    proposal_id: String,
 }
 
 #[derive(Serialize)]
-pub struct CommitResponse { 
-    committed: bool, 
-    record_id: String 
+pub struct CommitResponse {
+    committed: bool,
+    record_id: String,
 }
 
 pub async fn commit_system_proposal(
@@ -38,7 +33,8 @@ pub async fn commit_system_proposal(
     };
 
     // Rebuild and verify the canonical record that will be stored
-    let record = st.rebuild_canonical_record_from_proposal(&committed_proposal)
+    let record = st
+        .rebuild_canonical_record_from_proposal(&committed_proposal)
         .map_err(|_| AppError::internal("proposal invalid"))?;
 
     // Enforce that the record is in system space
@@ -62,8 +58,11 @@ pub async fn commit_system_proposal(
     }
     tracing::info!("System proposal committed: {}", committed_proposal.id);
 
-    Ok((StatusCode::OK, Json(CommitResponse { 
-        committed: true, 
-        record_id: record.id 
-    })))
+    Ok((
+        StatusCode::OK,
+        Json(CommitResponse {
+            committed: true,
+            record_id: record.id,
+        }),
+    ))
 }

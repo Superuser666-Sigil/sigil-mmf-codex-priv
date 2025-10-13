@@ -234,7 +234,7 @@ mod tests {
     fn test_number_canonicalization() {
         let input = json!({
             "int": 42,
-            "float": 3.14,
+            "float": std::f64::consts::PI,
             "zero": 0.0,
             "whole": 5.0
         });
@@ -242,7 +242,10 @@ mod tests {
         let canonical = canonicalize_json(&input).unwrap();
 
         // Should produce exact canonical form with proper number formatting
-        assert_eq!(canonical, r#"{"float":3.14,"int":42,"whole":5,"zero":0}"#);
+        assert_eq!(
+            canonical,
+            r#"{"float":3.141592653589793,"int":42,"whole":5,"zero":0}"#
+        );
     }
 
     #[test]
@@ -305,7 +308,7 @@ mod tests {
     fn test_rfc8785_basic_example() {
         // RFC 8785 Section 3.1 basic example
         let input = json!({
-            "numbers": [333333333.33333329, 1E30, 4.50, 2e-3, 0.000000000000000000000000001],
+            "numbers": [333333333.3333333, 1E30, 4.50, 2e-3, 0.000000000000000000000000001],
             "string": "\u{20ac}$\u{000F}\u{000a}A'\u{0042}\u{0022}\u{005c}\\\"/",
             "literals": [null, true, false]
         });
@@ -435,7 +438,7 @@ mod tests {
         let input = json!({
             "string": "text",
             "number": 42,
-            "float": 3.14159,
+            "float": std::f64::consts::PI,
             "boolean_true": true,
             "boolean_false": false,
             "null_value": null,
@@ -448,7 +451,7 @@ mod tests {
         let canonical = canonicalize_json(&input).unwrap();
 
         // All data types should be handled correctly
-        let expected = r#"{"array":[1,"two",true,null],"boolean_false":false,"boolean_true":true,"empty_array":[],"empty_object":{},"float":3.14159,"null_value":null,"number":42,"object":{"key":"value"},"string":"text"}"#;
+        let expected = r#"{"array":[1,"two",true,null],"boolean_false":false,"boolean_true":true,"empty_array":[],"empty_object":{},"float":3.141592653589793,"null_value":null,"number":42,"object":{"key":"value"},"string":"text"}"#;
         assert_eq!(canonical, expected);
     }
 

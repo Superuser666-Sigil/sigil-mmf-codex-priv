@@ -1,333 +1,207 @@
-# SigilDERG/MMF/Codex Nexus – Refactoring Plan to Achieve Strong MVP
+# SigilDERG/MMF/Codex Nexus Refactoring Plan (MVP Readiness)
 
 ## Context and Vision
-The Sigil project aims to provide a secure local runtime for large‑language‑model agents and modules. Its distinctive features are a logistic trust model with levels of access (LOA), cryptographically verifiable audit trails using JSON Canonicalization Scheme (JCS), SHA‑256 hashing and Ed25519 signatures, and a k‑of‑n witness quorum for privileged operations. Three subsystems define the architecture:
-•	MMF (Sigil module execution layer) – hosts user‑facing modules and manages interactions; modules must return structured outputs according to Rule Zero.
-•	SigilDERG (control plane) – enforces trust policies, LOA gates, witness/quorum logic, and routes requests to the correct components.
-•	Codex Nexus (data plane) – stores canonicalized, signed records and supports retrieval and retrieval‑augmented generation.
+Sigil provides a secure local runtime for large-language-model agents. Three cooperating subsystems form the architecture:
+- MMF (module execution layer) hosts user-facing modules and enforces Rule Zero outputs.
+- SigilDERG (control plane) applies trust policies, LOA gates, quorum logic, and routes requests.
+- Codex Nexus (data plane) stores canonicalized, hashed, and signed records for durable audit and RAG.
 
-## High‑Level Goals for MVP
-1.	Unified, encrypted storage backend for all canonical records; every persistent write must be canonicalized, hashed and signed.
-2.	Full LOA and trust enforcement, including license validation and k‑of‑n witness gating on system‑space writes.
-3.	Functional memory and RAG APIs so modules can persist outputs and support retrieval‑augmented generation.
-4.	Complete CLI and API interfaces for licenses, witnesses, proposals, commits, module invocation and data management.
-5.	Comprehensive tests, documentation and tooling to ensure correctness and maintainability.
+## MVP Goals Recap
+1. Unified encrypted canonical storage; every persistent write must be canonicalized, hashed, and signed.
+2. End-to-end LOA enforcement and license validation, including quorum-controlled system writes.
+3. Functional memory and RAG APIs with auditable persistence.
+4. Complete CLI and API surface for licenses, witnesses, proposals, module execution, and data management.
+5. Comprehensive tests, documentation, and tooling that keep the runtime trustworthy.
 
-## Current Implementation Status
-✅ **COMPLETED COMPONENTS:**
-- Ed25519 Cryptographic Signatures: Complete implementation with key generation, signing, and verification
-- Encrypted Canon Storage: AES-GCM encrypted Sled database backend with secure key management  
-- JSON Canonicalization (RFC 8785): Cryptographically stable JSON representation for tamper-evident records
-- CSRF Protection: Token-based protection with configurable expiration
-- Rate Limiting: Configurable request throttling per client
-- HTTP API: Basic trust evaluation, canon operations, system proposals, module execution endpoints
-- CLI Tools: Runtime execution, web server, canon validation, key management, license generation
-- Audit & Trust System: ReasoningChain → FrozenChain, audit chain integrity, witness registry
+## Status Overview
+### Completed Components
+- Ed25519 key management, signing, and verification.
+- AES-GCM sled-backed CanonStore (encrypted) plus deterministic test-only key helper.
+- JSON Canonicalization (RFC 8785) with updated fixtures and PI constants.
+- CSRF protection (read-lock validation, post-success invalidation, periodic cleanup).
+- Rate limiting with background maintenance task.
+- HTTP APIs covering trust, canon operations, proposals, attestation, module execution.
+- CLI utilities (runtime launcher, web server, canon validation, key lifecycle, license generator with error propagation).
+- Audit & trust pipeline (ReasoningChain + FrozenChain, witness registry, SigilRuntimeCore gating).
+- Sign-on-write now default across API, module, and quorum paths.
 
-🔄 **PARTIALLY COMPLETE:**
-- Trust Evaluation System: Logistic trust model with 5-feature evaluation exists but isn't driving gating decisions or weight updates
-- LOA (Level of Access) Enforcement: 5-tier access control system exists but license validator and middleware don't actually gate requests
-- Quorum System: Multi-party witness signatures scaffolding exists but validation logic has significant gaps
-- License System: Basic structure exists but validation and LOA enforcement are stubs
-- Memory/RAG APIs: Endpoints exist but use minimal test records, not fully signed
-- Module System: Basic structure exists but integration with canonical storage is incomplete
-- Configuration: Basic TOML config exists but needs harmonization across components
-
-❌ **INCOMPLETE:**
-- Sign-on-write enforcement everywhere
-- Complete witness/quorum system with proper validation
-- Full memory/RAG functionality with vector storage
-- Module integration with canonical storage
-- Comprehensive testing and documentation
-- Legacy record migration to signed format
+### Partially Complete Areas (updated)
+- Canon storage still has legacy unencrypted helpers in tests and lacks migration tooling.
+- License validation works, but LOA policies remain scattered and development header fallback is enabled by config.
+- Witness/quorum flow revalidates signatures but lacks rotation, revocation, and rich CLI management.
+- Memory/RAG APIs persist signed records but miss pagination, vector-store integration, and provenance tooling.
+- Module integration persists FrozenChains yet lacks ModuleContext helpers and Rule-Zero manifest enforcement.
+- Configuration/glue code still constructs state ad-hoc; needs harmonized config loader.
+- CLI/tooling roadmap largely outstanding beyond existing utilities.
+- Quality gates exist in CI, but stress, concurrency, failure-injection, and performance suites are absent.
 
 ## Detailed Refactoring Tasks
 
 ### 1. Consolidate Canon Storage
-**Status: PARTIALLY COMPLETE** - Encrypted sled backend exists but multiple backends remain
+**Status:** In Progress
 
-**Tasks:**
-- Adopt one production canonical storage backend using encrypted sled; remove file‑based or unencrypted back‑ends
-- Provide a CanonStore trait with a concrete SledCanonStore using the existing encryption key and path
-- Supply migration scripts to convert existing records
-- **Legacy Record Migration**: Create migration utilities to convert unsigned or "test" records currently in Canon to the new signed format
-- Ensure the store is an append‑only log of CanonicalRecord objects
-- Each record must be canonicalized with JCS, hashed using SHA‑256 and signed with Ed25519
-- Current API handlers often use CanonicalRecord::new_minimal_for_test and bypass signatures; replace these with fully signed records on every write
-- Expose simple CRUD operations via the CanonStore trait: add_record, get_record, list_records and retrieval by prev hash
-- Use sled transactions to guarantee atomic writes and implement crash‑recovery tests
+**Current Reality**
+- Encrypted `CanonStoreSled` is production default.
+- All tests now instantiate the encrypted variant via `EncryptedCanonStoreSled::new` using `KeyManager::dev_key_for_testing()`.
+- No migration utilities exist for legacy unsigned records.
 
-**Acceptance Criteria:**
-- All writes to CanonStore verified in tests with proper JCS canonicalization and Ed25519 signatures
-- Migration scripts successfully convert all existing test records to signed format
-- Sled transaction model tested under concurrent writes to uncover race conditions
-- Crash-recovery tests demonstrate atomic writes and data integrity
+**Next Actions**
+- Provide a `CanonStore` trait backed solely by the encrypted sled implementation; deprecate unencrypted helpers except in hermetic tests.
+- Deprecate or feature-gate the unencrypted `canon_store_sled` module and forbid production usage.
+- Build a migration tool that canonicalizes, hashes, and re-signs legacy/test records.
+- Exercise sled transactions under load (concurrency harness + crash-recovery).
+- Document operational runbooks for key rotation, backup, and restore.
 
-### 2. Enforce Sign‑on‑Write Everywhere
-**Status: INCOMPLETE** - Many write paths still use minimal, unsigned test records
+**Acceptance Criteria**
+- One production storage backend (encrypted) with verified migrations.
+- Concurrency/crash tests demonstrate atomicity.
+- Operational docs cover key and store management.
 
-**Tasks:**
-- Review all API handlers and internal functions that produce persistent data (license issuance, proposals, system commits, memory/RAG entries, module results, configuration changes) and ensure each performs:
-  - Deterministic JCS serialization of the payload
-  - SHA‑256 digest of the canonical string
-  - Ed25519 signature via the runtime KeyStore
-  - Construction of a CanonicalRecord with metadata (kind, space, schema_version, links, prev etc.)
-  - Persistence to CanonStore
-- Replace TODOs in the memory API and module code where writes are currently stubbed or logged
-- Update commit_system_proposal so it appends the canonical record to the store instead of simply logging the operation
-- Add an audit hook to capture success/failure for each write and ensure logs cannot be suppressed
-- **Concurrency Testing**: Exercise signature code paths under concurrent writes to uncover race conditions
-- **Error Handling**: Test signature failures, canonicalization errors, and storage failures under various conditions
+### 2. Enforce Sign-on-Write Everywhere
+**Status:** Complete (Follow-up Hardening)
 
-**Acceptance Criteria:**
-- Every persistent write path produces a properly signed CanonicalRecord
-- No more CanonicalRecord::new_minimal_for_test usage in production code paths
-- Concurrency tests pass with multiple simultaneous writes
-- Error handling gracefully manages signature failures and storage errors
+**What Changed**
+- All API, module, and quorum writes emit signed `CanonicalRecord`s.
+- `KeyManager::get_encryption_key` now errors when the secret is missing; tests opt into `install_dev_encryption_key_for_testing`.
+
+**Remaining Work**
+- Add failure-injection tests (signature failure, canonicalization error, storage refusal).
+- Build stress tests with concurrent writers to smoke out lock/IO contention.
+- Trace logging of sign/write results for audit correlation.
 
 ### 3. Implement License Validation and LOA Enforcement
-**Status: PARTIALLY COMPLETE** - Basic structure exists but validation and LOA enforcement are stubs
+**Status:** Partially Complete (Middleware integrated for enhanced routes)
 
-**Tasks:**
-- Finalize the license document schema: include subject ID, issue time, expiry, permitted LOA and role (root/operator/mentor/observer/guest)
-- Canonicalize and sign licenses using the root key
-- In the auth middleware, validate incoming licenses by canonicalizing the document, computing the hash, verifying the signature and checking the expiry
-- Extract LOA and role and attach them to the request context
-- Replace the stubbed /api/license/validate endpoint with a real service that verifies uploaded licenses and returns the caller's LOA and role
-- Map each API route and CLI command to a required LOA; e.g., memory writes require Mentor LOA, system‑space commits require root LOA plus k‑of‑n witnesses
-- Implement a policy layer so enforcement is consistent
+**Current Reality**
+- License validator verifies signed documents via headers or cookies.
+- Handlers fall back to development header auth when `MMF_DEV_HEADER_AUTH` is enabled.
+- LOA requirements are enforced inline by each route.
+ - Central LOA policy table and middleware added for `enhanced_web` routes.
+ - Dev header fallback now additionally gated by compile-time feature `dev-auth`.
 
-**Acceptance Criteria:**
-- License validator and middleware actually gate requests based on LOA
-- All API endpoints reject requests with insufficient LOA
-- License validation tests cover expired, invalid, and malformed licenses
-- LOA enforcement is consistent across all API routes and CLI commands
+**Next Actions**
+- Centralize LOA policy mapping (per route/CLI command) and remove inline duplication.
+- Extend middleware to legacy `sigilweb` router (needs bindings access) or migrate remaining routes to `enhanced_web`.
+- Gate the dev fallback behind explicit build/runtime toggles with loud warnings. (Feature `dev-auth` + `MMF_DEV_HEADER_AUTH` env)
+- Expand negative tests (expired, malformed, mismatched runtime/LOA).
+
+**Acceptance Criteria**
+- All ingress paths share a single policy table and middleware (or are migrated to `enhanced_web`).
+- CI tests cover LOA success/failure matrices.
+- Development bypass requires explicit opt-in and cannot leak to production.
 
 ### 4. Complete Witness/Quorum System
-**Status: PARTIALLY COMPLETE** - Basic quorum system exists but needs refinement
+**Status:** Partially Complete
 
-**Tasks:**
-- Extend the witness registry to support key rotation, revocation and listing
-- Provide CLI commands to manage witnesses
-- Refine quorum logic so proposals have unique IDs, and witness signatures are stored in the witnesses field
-- commit_system_proposal must verify k‑of‑n unique signatures, ensure the prev pointer references the latest system record, validate canonicalization and root signature, and then append the record to the canon store
-- Add tests for invalid witness lists (duplicate IDs, insufficient signatures, wrong hashes or expired proposals)
+**Current Reality**
+- System proposal commits revalidate signatures and persist signed records.
+- Witness registry now exposes poison-aware reads but lacks rotation and revocation.
 
-**Acceptance Criteria:**
-- Quorum validation logic properly verifies k‑of‑n unique signatures
-- System proposals cannot be committed without sufficient witness signatures
-- Witness registry supports key rotation and revocation
-- All quorum edge cases (duplicates, insufficient signatures, invalid hashes) are properly handled
+**Next Actions**
+- Implement witness key rotation, revocation, and listing APIs/CLI commands.
+- Enforce k-of-n uniqueness with clearer error feedback (duplicates, stale proposals, wrong hashes).
+- Add tests for expiration logic and prev-hash validation.
+
+**Acceptance Criteria**
+- Rotation and revocation flows exist with integration tests.
+- Quorum rejection cases are exhaustively tested.
+- Ops tooling emits structured logs/metrics for proposal lifecycle.
 
 ### 5. Finalize Memory and RAG APIs
-**Status: PARTIALLY COMPLETE** - Endpoints exist but use minimal test records, not fully signed
+**Status:** Partially Complete
 
-**Tasks:**
-- Complete memory_write: accept key, text, ts and user_id, validate LOA, canonicalize and sign the payload, and persist it as a CanonicalRecord in the data space
-- Implement memory_list with pagination and LOA checks; allow retrieval of memory entries by key or by time range
-- Implement rag_upsert: accept content and embeddings, persist the vector into a vector store (hnswlib/FAISS) keyed by key, and wrap metadata in a signed canonical record
-- **Data Hygiene Pipeline**: Create formal data-ingestion pipeline with provenance and license checks for RAG corpus
-- **RAG Corpus Management**: Implement license validation and provenance tracking for Rust docs, crates, and other ingested data
-- Provide CLI tools to import RAG datasets (e.g., Rust docs) and persist them via the API
+**Current Reality**
+- `memory_write`, `memory_list`, and `rag_upsert` emit signed canonical records.
+- No pagination, filtering, or vector-store integration is present.
+- Ingestion/licensing pipeline is still conceptual.
 
-**Acceptance Criteria:**
-- Memory and RAG APIs produce fully signed CanonicalRecords
-- Memory entries are properly paginated and filtered by LOA
-- Vector store integration works with concurrent writes
-- Data ingestion pipeline validates licenses and tracks provenance
-- CLI tools successfully import and persist RAG datasets with proper licensing metadata
+**Next Actions**
+- Add pagination and LOA-aware filtering to listing endpoints.
+- Integrate vector storage (e.g., hnswlib/FAISS) or stub interface with tests.
+- Build provenance/licensing checks for ingestion, plus CLI import helpers.
+
+**Acceptance Criteria**
+- APIs support filtered, paginated reads and concurrent writes.
+- Vector-store integration has tests and metrics.
+- Data ingestion validates source licenses and records provenance.
 
 ### 6. Integrate Trust Evaluation with SigilDERG
-**Status: PARTIALLY COMPLETE** - Trust evaluation system exists but isn't driving gating decisions
+**Status:** Mostly Complete (Policy Work Remains)
 
-**Tasks:**
-- Wire trust evaluation system through SigilDERG control plane to drive gating decisions
-- Implement trust score-based weight updates and policy enforcement
-- Integrate trust evaluation with module execution and LOA enforcement
-- Add trust score thresholds for different operations and modules
-- Implement trust score decay and recovery mechanisms
-- Add trust evaluation to quorum decisions and witness selection
+**Current Reality**
+- `SigilRuntimeCore::validate_action` returns `SigilResult` and handlers gate on trust decisions.
 
-**Acceptance Criteria:**
-- Trust evaluation system drives actual gating decisions in SigilDERG
-- Trust scores influence module execution and LOA enforcement
-- Trust-based weight updates are implemented and tested
-- Trust evaluation integrates with quorum and witness systems
+**Next Actions**
+- Implement trust score decay/recovery and model weight updates.
+- Feed trust outcomes into witness/quorum prioritization and module run policies.
+- Record trust decisions to audit trails for later review.
+
+**Acceptance Criteria**
+- Policy changes reflected in config/tests (e.g., thresholds per operation).
+- Trust history stored for analytics/audit.
+- Quorum and module systems consume trust-derived signals.
 
 ### 7. Integrate Modules with Canonical Storage
-**Status: PARTIALLY COMPLETE** - Basic module system exists but integration with canonical storage is incomplete
+**Status:** Partially Complete
 
-**Tasks:**
-- Ensure RustMentorModule writes its reasoning chain and suggestion to the canon store; currently it logs but does not persist
-- Provide a ModuleContext to modules with canon_store, trust_evaluator, license and rag_store handles
-- Implement helper methods like write_memory() and log_interaction() to hide canonicalization details
-- Document and enforce the Rule Zero module manifest (fields: input, context, reasoning, suggestion, verdict, audit)
-- Reject modules that do not return complete records
+**Current Reality**
+- RustMentor persists FrozenChain records to CanonStore.
+- ModuleContext abstraction and Rule-Zero manifest enforcement are not implemented.
 
-**Acceptance Criteria:**
-- Module outputs persisted with full Rule‑Zero manifest
-- RustMentorModule produces signed canonical records for all interactions
-- ModuleContext provides clean abstraction for canonicalization
-- All modules enforce complete Rule Zero manifest requirements
+**Next Actions**
+- Provide ModuleContext helpers (write_memory, log_interaction, emit_audit) that encapsulate canonicalization.
+- Enforce Rule-Zero manifest validation on module outputs with tests.
+- Document module authoring guide and CLI scaffolding.
+
+**Acceptance Criteria**
+- Modules interact exclusively through ModuleContext helpers.
+- Manifest validation stops incomplete or malformed responses.
+- Developer documentation and examples are published.
 
 ### 8. Clean Up Runtime Glue and Configuration
-**Status: PARTIALLY COMPLETE** - Basic TOML config exists but needs harmonization
+**Status:** Partially Complete
 
-**Tasks:**
-- Harmonize configuration keys across environment variables, command‑line flags and config files
-- Create a single config.toml with namespaced sections (canon, keystore, server, llm, policies)
-- Provide a config module that loads defaults, merges environment overrides and validates required fields
-- Construct AppState from validated config and pass Arc<dyn CanonStore> and KeyStore to all components
-- Remove deprecated routes from the old sigilweb router and centralize middleware in enhanced_web
+**Next Actions**
+- Harmonize config keys across TOML, env vars, and CLI flags.
+- Build a single loader that merges defaults, files, and env overrides with validation.
+- Construct `AppState` exclusively through validated config and inject shared services.
+- Consolidate routing/middleware in `enhanced_web` and deprecate legacy paths.
 
 ### 9. Expand CLI and Developer Tooling
-**Status: PARTIALLY COMPLETE** - Basic CLI exists but needs expansion
+**Status:** Partially Complete
 
-**Tasks:**
-- Develop a sigil-cli with commands for:
-  - Generating root and witness keys
-  - Creating and signing licenses
-  - Registering and listing witnesses
-  - Creating proposals, collecting witness signatures and committing them
-  - Importing memory and RAG data
-  - Running modules for testing
-- Ensure CLI commands invoke the same canonicalization and LOA checks as the API
-- Provide a make dev script to spin up a development environment with sample keys, a test canon store and seed memory/RAG data from permissively licensed Rust documentation
+**Next Actions**
+- Implement `sigil-cli` commands for key generation, witness management, proposals, memory/RAG import, and module test harnessing.
+- Provide a `make dev` or cargo xtask to bootstrap a dev environment with sample keys and data.
+- Ensure CLI paths reuse the same canonicalization/LOA checks as the HTTP API.
 
 ### 10. Testing and Quality Assurance
-**Status: INCOMPLETE** - Basic tests exist but comprehensive coverage needed
+**Status:** Incomplete
 
-**Tasks:**
-- Canonicalization tests: create a suite of JSON structures and confirm that JCS serialization matches RFC 8785; cross‑check with a reference implementation
-- Sign/verify tests: verify that all record writes produce valid signatures; mutate payloads and signatures to ensure verification fails
-- LOA enforcement tests: confirm that unauthorized LOA values are rejected and valid LOA values succeed for each endpoint
-- Quorum tests: test k‑of‑n witness logic with duplicate signatures, insufficient signers and invalid hashes
-- Memory/RAG tests: test writing, listing and retrieving memory blocks; run concurrent writes to ensure order and consistency
-- Module integration tests: run the RustMentorModule end‑to‑end; verify it produces signed canonical records and respects trust policies
-- **Concurrency and Error‑Handling Tests**: Exercise sled's transaction model and signature code paths under concurrent writes to uncover race conditions
-- **Performance Testing**: Measure overhead of signing, verification and k‑of‑n quorum under load; implement batch signing or caching if needed to keep latency acceptable
-- Use property‑based testing (e.g., proptest) for canonicalization and signature invariants; run miri to detect undefined behaviour and concurrency issues
-- Enforce clippy, fmt, audit and deny in continuous integration
+**Next Actions**
+- Build canonicalization cross-checks against a reference implementation.
+- Add sign/verify mutation tests to ensure tampering detection.
+- Extend LOA, quorum, and module tests to cover failure scenarios.
+- Create concurrency, load, and performance suites plus `cargo miri` smoke tests for hot paths.
+- Establish documentation linting and threat-model validation.
 
-**Acceptance Criteria:**
-- All tests pass under concurrent execution
-- Race conditions in signature and storage code paths are eliminated
-- Performance tests show acceptable latency for signing, verification, and quorum operations
-- Property-based tests validate canonicalization and signature invariants
-- Miri reports no undefined behavior
-- CI pipeline enforces all quality gates (clippy, fmt, audit, deny)
+## Additional Follow-ups
+- Add guardrails around `install_dev_encryption_key_for_testing` to prevent accidental production use (lint/config check).
+- Optimize rate-limiter cleanup so multiple routers do not spawn duplicate tasks in a single process.
+- Track documentation debt (API reference, ops runbooks, security model) alongside code tasks.
 
-### 11. Documentation and Research Artifacts
-**Status: INCOMPLETE** - Basic README exists but comprehensive documentation needed
+## Critical Path (Updated)
+1. Finish storage consolidation and migration tooling. (tests migrated to encrypted store)
+2. Centralize LOA/Trust policies and remove dev bypass from production builds. (Active focus)
+3. Complete witness rotation/revocation plus quorum edge cases.
+4. Deliver memory/RAG pagination + vector integration + provenance pipeline.
+5. Ship ModuleContext helpers and Rule-Zero enforcement.
+6. Harden testing with concurrency, failure-injection, and performance suites.
 
-**Tasks:**
-- Update REFRACTORING_PLAN to track progress on the tasks listed here; remove completed items
-- Revise the README to describe the architecture, trust model, LOA hierarchy, witness/quorum design and setup instructions
-- Publish an API specification (OpenAPI/Swagger) documenting endpoints, request/response formats and LOA requirements
-- Write a CLI guide and a module developer guide detailing how to implement Rule Zero modules and interact with the canon store
-- Provide a system administrator guide covering key setup, witness management, storage configuration and seeding RAG data
-- Include a threat model and security analysis explaining why canonicalization, signatures and quorum are necessary and what threats remain
-
-### 12. Licensing and Packaging
-**Status: PARTIALLY COMPLETE** - License files exist but needs clarification
-
-**Tasks:**
-- Clarify project licensing and embed license notices in all source files
-- Document licenses for imported datasets (e.g., The Rust Book, Rustonomicon) and store this metadata in the canon store
-- Provide a root LICENSE file and update Cargo.toml metadata
-- Package the runtime as a container image with minimal dependencies; include sample keys and configuration for quick start
-- Provide Docker Compose or Nix definitions for running the full stack
-
-### 13. Future Directions Beyond MVP
-**Status: NOT APPLICABLE** - Future enhancements
-
-**Tasks:**
-- Explore threshold signatures (e.g., FROST for Ed25519) so multiple witness signatures can be aggregated into a single signature
-- Integrate a public transparency log (e.g., Sigstore Rekor) to mirror record digests for independent verification
-- Add multi‑tenant support with per‑tenant witness sets and namespaced canon stores
-- Investigate hardware‑backed key storage and remote attestation for runtime integrity
-- Develop additional modules and a plugin ecosystem, using WASI sandboxing to run untrusted module code
-
-## Critical Path and Prioritization
-
-### Phase 1: Core Security Foundation (Weeks 1-2)
-**Critical Path Tasks:**
-1. **Enforce Sign‑on‑Write Everywhere** - Foundation for all other security
-2. **Implement License Validation and LOA Enforcement** - Required for access control
-3. **Consolidate Canon Storage** - Unified storage with proper signing
-
-### Phase 2: Trust and Control (Weeks 3-4)
-**Critical Path Tasks:**
-4. **Integrate Trust Evaluation with SigilDERG** - Wire trust system into control plane
-5. **Complete Witness/Quorum System** - Multi-party validation for system changes
-
-### Phase 3: Data and Modules (Weeks 5-6)
-**Critical Path Tasks:**
-6. **Finalize Memory and RAG APIs** - Data persistence with proper signing
-7. **Integrate Modules with Canonical Storage** - Module outputs properly persisted
-
-### Phase 4: Polish and Production (Weeks 7-8)
-**Supporting Tasks:**
-8. **Clean Up Runtime Glue and Configuration** - Production readiness
-9. **Testing and Quality Assurance** - Comprehensive validation
-10. **Documentation and Research Artifacts** - User and developer guides
-
-**Timeline Notes:**
-- Focus on critical path tasks first to ensure MVP functionality
-- Performance testing should be integrated throughout, not left until the end
-- Data hygiene pipeline can be developed in parallel with RAG APIs
-- CLI tooling can be developed incrementally as other systems mature
-
-## CI Pipeline and Quality Gates
-
-### Continuous Integration Requirements
-- **Code Quality**: `cargo clippy --all-targets --all-features -- -D warnings`
-- **Formatting**: `cargo fmt --all -- --check`
-- **Security Audit**: `cargo audit` (if configured)
-- **License Check**: `cargo deny check` (if configured)
-- **Testing**: `cargo test --workspace --all-features`
-- **Documentation**: `cargo doc --workspace --no-deps -D warnings`
-- **Concurrency Testing**: Run tests with `RUST_TEST_THREADS=1` and `RUST_TEST_THREADS=16`
-- **Memory Safety**: `cargo miri test` for critical paths
-
-### MVP Acceptance Criteria Checkpoint
-Each major task includes specific acceptance criteria that must be met before considering the MVP complete:
-
-1. **Storage Consolidation**: All writes verified with proper signatures, migration complete
-2. **Sign-on-Write**: No test records in production, concurrency tests pass
-3. **LOA Enforcement**: License validator actually gates requests, all endpoints protected
-4. **Quorum System**: k‑of‑n validation works, edge cases handled
-5. **Memory/RAG**: Fully signed records, vector store integration, data hygiene pipeline
-6. **Trust Integration**: Trust evaluation drives gating decisions in SigilDERG
-7. **Module Integration**: Rule Zero manifest enforced, outputs persisted
-8. **Configuration**: Harmonized across components, validated at startup
-9. **CLI Tooling**: Complete command set with proper LOA checks
-10. **Testing**: Comprehensive coverage including concurrency, error handling, and performance
-11. **Documentation**: Complete API spec, guides, and threat model
-
-### CI Pipeline Configuration
-```yaml
-# .github/workflows/ci.yml (example)
-name: CI
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          components: rustfmt, clippy
-      - name: Run tests
-        run: cargo test --workspace --all-features
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Run miri (if available)
-        run: cargo miri test --workspace
-```
+## CI Pipeline Summary
+- `cargo fmt`, `cargo clippy -D warnings`, `cargo test --all-features`, `cargo doc -D warnings` run on every PR (windows + linux matrix).
+- Security checks: `cargo audit`, `cargo deny`, minimal-versions build, outdated dependency report, SBOM generation.
+- Future work: add stress-test and miri jobs once harnesses exist.
 
 ## Conclusion
-The current codebase lays a solid foundation by introducing key systems such as license issuance, memory APIs, a sample module, enhanced routing and cryptographic key management. However, it still falls short of a strong MVP: persistent writes are not yet signed or stored, multiple canon back‑ends remain, LOA enforcement and license validation are stubs, and memory and RAG functionality is incomplete. By executing this refactoring plan—consolidating storage, enforcing sign‑on‑write, completing the witness/quorum system, finishing memory/RAG APIs, integrating modules with the data layer, cleaning up configuration, expanding tooling and adding comprehensive tests and documentation—the Sigil project will reach a robust, auditable and extensible MVP that realises the unique vision of secure, trustworthy and self‑governing local LLM execution.
+Foundational security features (sign-on-write, CSRF, trust gating, deterministic key handling) are now in place. The remaining roadmap focuses on operational maturity: unified storage, rigorous license/LOA policies, full quorum tooling, production-ready memory/RAG pipelines, module ergonomics, and exhaustive testing/documentation. Delivering these items will move Sigil from a robust prototype to a production-grade secure runtime for local LLM workloads.

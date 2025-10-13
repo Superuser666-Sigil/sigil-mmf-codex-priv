@@ -20,7 +20,7 @@ fn test_quorum_enforcement_blocks_system_writes_without_quorum() {
     let path = temp_dir.path().to_str().expect("temp path should be valid");
 
     // Set up encrypted canon store
-    let encryption_key = KeyManager::get_encryption_key().expect("should get encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("should get encryption key");
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(path, &encryption_key).expect("should create encrypted store"),
     ));
@@ -99,7 +99,7 @@ fn test_quorum_enforcement_allows_system_writes_with_quorum() {
     let path = temp_dir.path().to_str().expect("temp path should be valid");
 
     // Set up encrypted canon store
-    let encryption_key = KeyManager::get_encryption_key().expect("should get encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("should get encryption key");
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(path, &encryption_key).expect("should create encrypted store"),
     ));
@@ -195,7 +195,7 @@ fn test_user_space_writes_bypass_quorum() {
     let path = temp_dir.path().to_str().expect("temp path should be valid");
 
     // Set up encrypted canon store
-    let encryption_key = KeyManager::get_encryption_key().expect("should get encryption key");
+    let encryption_key = KeyManager::dev_key_for_testing().expect("should get encryption key");
     let mut canon_store =
         EncryptedCanonStoreSled::new(path, &encryption_key).expect("should create encrypted store");
 

@@ -1,3 +1,3 @@
 pub mod license;
-pub mod quorum;
 pub mod memory;
+pub mod quorum;

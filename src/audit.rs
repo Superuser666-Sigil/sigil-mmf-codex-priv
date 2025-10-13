@@ -10,6 +10,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Mutex;
 
+const MAX_IN_MEMORY_AUDIT_EVENTS: usize = 1024;
+
 lazy_static! {
     static ref AUDIT_LOG: Mutex<Vec<AuditEvent>> = Mutex::new(Vec::new());
     static ref API_EVENTS: Mutex<HashMap<String, u32>> = Mutex::new(HashMap::new());
@@ -86,6 +88,11 @@ impl AuditEvent {
         match AUDIT_LOG.safe_lock() {
             Ok(mut log) => {
                 log.push(self.clone());
+                if log.len() > MAX_IN_MEMORY_AUDIT_EVENTS {
+                    let overflow = log.len() - MAX_IN_MEMORY_AUDIT_EVENTS;
+                    log.drain(0..overflow);
+                    debug!("Trimmed in-memory audit log by {} entries", overflow);
+                }
                 debug!(
                     "Added audit event to memory log, total events: {}",
                     log.len()

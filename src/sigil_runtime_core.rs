@@ -5,7 +5,7 @@
 use crate::audit::AuditEvent;
 use crate::canon_store::CanonStore;
 
-use crate::errors::{SafeLock, SigilResult};
+use crate::errors::{SafeLock, SigilError, SigilResult};
 use crate::loa::LOA;
 use crate::log_sink::LogEvent;
 use crate::runtime_config::{EnforcementMode, RuntimeConfig, TrustEvaluation};
@@ -26,8 +26,8 @@ use crate::witness_registry::WitnessRegistry;
 // Import the module system for executing LOA-gated modules
 use crate::module_loader::{HelloModule, ModuleRegistry};
 
-use log::{error, info};
 use std::sync::{Arc, Mutex};
+use tracing::{error, info};
 
 pub struct SigilRuntimeCore {
     pub loa: LOA,
@@ -135,11 +135,7 @@ impl SigilRuntimeCore {
     }
 
     /// Validate an action against trust model
-    pub fn validate_action(
-        &self,
-        event: &AuditEvent,
-        recent_requests: usize,
-    ) -> Result<bool, &'static str> {
+    pub fn validate_action(&self, event: &AuditEvent, recent_requests: usize) -> SigilResult<bool> {
         let evaluation = self.evaluate_event(event, recent_requests);
         match self.enforcement_mode {
             EnforcementMode::Passive => Ok(true),
@@ -148,7 +144,12 @@ impl SigilRuntimeCore {
                 if evaluation.allowed {
                     Ok(true)
                 } else {
-                    Err("Action denied by strict trust enforcement")
+                    Err(SigilError::Irl {
+                        message: format!(
+                            "Action '{}' denied under strict enforcement",
+                            event.action
+                        ),
+                    })
                 }
             }
         }
@@ -185,10 +186,7 @@ impl SigilRuntimeCore {
             }
         }
 
-        println!(
-            "✅ Refreshed {} models from canon store",
-            model_entries.len()
-        );
+        info!("Refreshed {} models from canon store", model_entries.len());
         Ok(())
     }
 
@@ -203,8 +201,7 @@ impl SigilRuntimeCore {
 }
 
 /// Run a Sigil session with proper config integration
-pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> Result<(), String> {
-    // Map config to runtime config
+pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> SigilResult<()> {
     let enforcement_mode = match config.irl.enforcement_mode.to_lowercase().as_str() {
         "active" => EnforcementMode::Active,
         "strict" => EnforcementMode::Strict,
@@ -220,44 +217,39 @@ pub fn run_sigil_session(config: &crate::config_loader::MMFConfig) -> Result<(),
         model_refresh_from_canon: config.irl.model_refresh_from_canon,
     };
 
-    // Use default canon store path, with proper encryption key management
     let canon_store_path = "data/canon_store";
-    let encryption_key = crate::keys::KeyManager::get_encryption_key()
-        .map_err(|e| format!("Failed to get encryption key: {e}"))?;
+    let encryption_key =
+        crate::keys::KeyManager::get_encryption_key().map_err(|e| SigilError::Encryption {
+            operation: format!("load CANON_ENCRYPTION_KEY: {e}"),
+        })?;
+
     let store =
         crate::canon_store_sled_encrypted::CanonStoreSled::new(canon_store_path, &encryption_key)
-            .map_err(|e| format!("Failed to create encrypted canon store: {e}"))?;
+            .map_err(|e| SigilError::Canon {
+            operation: "open encrypted canon store".to_string(),
+            message: e,
+        })?;
     let canon_store = Arc::new(Mutex::new(store));
 
-    // Parse LOA from config string
     let session_loa = LOA::from_str(&config.trust.default_loa)
-        .map_err(|e| format!("Invalid LOA format in config: {e}"))?;
+        .map_err(|e| SigilError::validation("default_loa", e.to_string()))?;
 
-    // Initialize runtime core with config-based parameters
-    let mut runtime = SigilRuntimeCore::new(session_loa, canon_store, runtime_config.clone())
-        .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
+    let mut runtime = SigilRuntimeCore::new(session_loa, canon_store, runtime_config.clone())?;
 
-    // Use single model/threshold source based on config flag
     if runtime_config.model_refresh_from_canon {
-        // Refresh from Canon records
-        runtime.refresh_models().map_err(|e| format!("Failed to refresh models from canon: {e}"))?;
-        println!("Using canon-based threshold: {:.2}", runtime.threshold);
+        runtime.refresh_models()?;
+        info!("Using canon-based threshold: {:.2}", runtime.threshold);
     } else {
-        // Use config-based threshold (already set in runtime_config)
-        println!("Using config-based threshold: {:.2}", runtime.threshold);
+        info!("Using config-based threshold: {:.2}", runtime.threshold);
     }
 
-    // Start the runtime session
-    println!("🚀 Sigil runtime session started");
-    println!("   LOA: {:?}", runtime.loa);
-    println!("   Enforcement: {:?}", runtime.enforcement_mode);
-    println!("   Active Model: logistic-builtin");
-    println!("   Threshold: {:.2}", runtime.threshold);
-    println!("   Canon Store: {}", canon_store_path);
+    info!(
+        loa = ?runtime.loa,
+        enforcement = ?runtime.enforcement_mode,
+        threshold = runtime.threshold,
+        canon_store = canon_store_path,
+        "Sigil runtime session ready"
+    );
 
-    // Keep the runtime alive (in a real implementation, this would handle events)
-    std::thread::sleep(std::time::Duration::from_secs(1));
-
-    println!("✅ Sigil runtime session completed");
     Ok(())
 }

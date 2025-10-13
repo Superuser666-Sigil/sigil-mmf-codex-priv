@@ -17,7 +17,7 @@ use tempfile::TempDir;
 fn test_module_loa_enforcement_operator_success() {
     // Create a temporary canon store
     let temp_dir = TempDir::new().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));
@@ -72,7 +72,7 @@ fn test_module_loa_enforcement_operator_success() {
 fn test_module_loa_enforcement_guest_denied() {
     // Create a temporary canon store
     let temp_dir = TempDir::new().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));
@@ -123,7 +123,7 @@ fn test_module_loa_enforcement_guest_denied() {
 fn test_module_registry_nonexistent_module() {
     // Create a temporary canon store
     let temp_dir = TempDir::new().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));
@@ -166,7 +166,7 @@ fn test_module_registry_nonexistent_module() {
 fn test_module_registry_builtin_modules() {
     // Create a temporary canon store
     let temp_dir = TempDir::new().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));

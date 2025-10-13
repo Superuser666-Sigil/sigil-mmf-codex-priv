@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
+use std::sync::OnceLock;
 
 /// Errors that can occur during key operations
 #[derive(Debug, thiserror::Error)]
@@ -193,7 +194,9 @@ impl KeyStore {
 }
 
 impl Default for KeyStore {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CanonSigningKey {
@@ -392,8 +395,10 @@ impl CanonSigningKey {
 /// Key management utilities with environment controls and rotation
 pub struct KeyManager;
 
+static TEST_KEY_OVERRIDE: OnceLock<[u8; 32]> = OnceLock::new();
+
 impl KeyManager {
-    /// Get the encryption key from environment or generate a default one
+    /// Get the encryption key from environment.
     ///
     /// Environment variables:
     /// - CANON_ENCRYPTION_KEY: Base64-encoded 32-byte AES key
@@ -402,26 +407,42 @@ impl KeyManager {
     pub fn get_encryption_key() -> Result<[u8; 32], KeyError> {
         if let Ok(key_b64) = std::env::var("CANON_ENCRYPTION_KEY") {
             let key_bytes = B64
-                .decode(&key_b64)
+                .decode(key_b64.as_bytes())
                 .map_err(|_| KeyError::InvalidEncryptionKey)?;
+
             if key_bytes.len() != 32 {
-                return Err(KeyError::InvalidEncryptionKey);
+                return Err(KeyError::InvalidKeyLength(key_bytes.len()));
             }
+
             let mut key = [0u8; 32];
             key.copy_from_slice(&key_bytes);
             return Ok(key);
         }
 
-        log::warn!(
-            "No CANON_ENCRYPTION_KEY environment variable set, using default key for development"
-        );
-        log::warn!("This is NOT secure for production use!");
+        if let Some(key) = TEST_KEY_OVERRIDE.get() {
+            return Ok(*key);
+        }
 
-        // Default key for development only - NOT secure for production!
-        let mut key = [0u8; 32];
-        key[..16].copy_from_slice(b"sigil_dev_key_16");
-        key[16..].copy_from_slice(b"bytes_for_aes256");
-        Ok(key)
+        Err(KeyError::KeyNotFound("CANON_ENCRYPTION_KEY".to_string()))
+    }
+
+    #[allow(dead_code)]
+    pub(crate) const DEV_TEST_ENCRYPTION_KEY_B64: &'static str =
+        "c2lnaWxfZGV2X2tleV8xNmJ5dGVzX2Zvcl9hZXMyNTY=";
+    pub(crate) const DEV_TEST_ENCRYPTION_KEY_BYTES: [u8; 32] = *b"sigil_dev_key_16bytes_for_aes256";
+
+    /// Install an insecure development key for tests when no key is configured.
+    ///
+    /// This helper is intended for test harnesses only so production deployments
+    /// must still provide a unique CANON_ENCRYPTION_KEY.
+    pub fn install_dev_encryption_key_for_testing() {
+        let _ = TEST_KEY_OVERRIDE.get_or_init(|| Self::DEV_TEST_ENCRYPTION_KEY_BYTES);
+    }
+
+    /// Retrieve the deterministic development key for test scenarios.
+    pub fn dev_key_for_testing() -> Result<[u8; 32], KeyError> {
+        Self::install_dev_encryption_key_for_testing();
+        Self::get_encryption_key()
     }
 
     /// Get the key directory path from environment or default
@@ -583,6 +604,7 @@ mod tests {
 
     #[test]
     fn test_key_manager_isolated() {
+        KeyManager::install_dev_encryption_key_for_testing();
         // Use a unique environment variable name to avoid interference
         let temp_dir = tempdir().unwrap();
         let key_dir = temp_dir.path().join("test_isolated_keys");

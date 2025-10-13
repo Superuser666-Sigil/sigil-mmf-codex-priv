@@ -4,9 +4,9 @@
 //! as outlined in The Rust Book Chapter 9 on Error Handling.
 
 use crate::loa::LOA;
-use thiserror::Error;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use thiserror::Error;
 
 /// Main error type for the Sigil Runtime system
 ///
@@ -235,9 +235,14 @@ impl SigilError {
 impl IntoResponse for SigilError {
     fn into_response(self) -> Response {
         let status = match self {
-            SigilError::Config { .. } | SigilError::Serialization { .. } | SigilError::Validation { .. } | SigilError::Crypto { .. } => StatusCode::BAD_REQUEST,
+            SigilError::Config { .. }
+            | SigilError::Serialization { .. }
+            | SigilError::Validation { .. }
+            | SigilError::Crypto { .. } => StatusCode::BAD_REQUEST,
             SigilError::Auth { .. } => StatusCode::UNAUTHORIZED,
-            SigilError::InsufficientLoa { .. } | SigilError::License { .. } => StatusCode::FORBIDDEN,
+            SigilError::InsufficientLoa { .. } | SigilError::License { .. } => {
+                StatusCode::FORBIDDEN
+            }
             SigilError::NotFound { .. } => StatusCode::NOT_FOUND,
             SigilError::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             SigilError::Network { .. } => StatusCode::BAD_GATEWAY,

@@ -103,5 +103,7 @@ web = []
 cli = []
 ml = []
 security = []
+# Development-only header auth fallback (must also set MMF_DEV_HEADER_AUTH=true)
+dev-auth = []
 # IRL features removed - using logistic trust model only
 # irl = []  # Removed

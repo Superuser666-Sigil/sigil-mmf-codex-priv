@@ -18,7 +18,7 @@ fn build_app() -> (Router<Arc<crate::app_state::AppState>>, tempfile::TempDir, S
 
     let temp_dir = TempDir::new().unwrap();
     let store_path = temp_dir.path().to_str().unwrap().to_string();
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let store_impl = EncryptedCanonStoreSled::new(&store_path, &encryption_key).unwrap();
     let canon_store: Arc<Mutex<dyn CanonStore>> = Arc::new(Mutex::new(store_impl));
 
@@ -140,4 +140,5 @@ async fn license_validate_endpoint_rejects_wrong_runtime() {
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v.get("valid").and_then(|x| x.as_bool()), Some(false));
 }
+
 

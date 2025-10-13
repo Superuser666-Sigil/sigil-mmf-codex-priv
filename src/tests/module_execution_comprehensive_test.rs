@@ -8,8 +8,8 @@
 //! - Performance and resource management
 
 use crate::canon_store_sled_encrypted::CanonStoreSled as EncryptedCanonStoreSled;
-use crate::keys::KeyManager;
 use crate::errors::{SigilError, SigilResult};
+use crate::keys::KeyManager;
 use crate::loa::LOA;
 use crate::module_loader::{ModuleContext, SigilModule};
 use crate::runtime_config::{EnforcementMode, RuntimeConfig};
@@ -96,7 +96,7 @@ impl SigilModule for FallibleModule {
 #[test]
 fn test_comprehensive_loa_enforcement() {
     let temp_dir = TempDir::new().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));
@@ -211,7 +211,7 @@ fn test_comprehensive_loa_enforcement() {
 #[test]
 fn test_module_error_handling() {
     let temp_dir = TempDir::new().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));
@@ -281,7 +281,7 @@ fn test_module_error_handling() {
 #[test]
 fn test_module_registry_management() {
     let temp_dir = TempDir::new().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));
@@ -343,7 +343,7 @@ fn test_module_registry_management() {
 #[test]
 fn test_module_context_validation() {
     let temp_dir = TempDir::new().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));
@@ -401,7 +401,7 @@ fn test_module_context_validation() {
 fn test_module_isolation() {
     // Test that modules don't interfere with each other
     let temp_dir = TempDir::new().unwrap();
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(temp_dir.path().to_str().unwrap(), &encryption_key).unwrap(),
     ));

@@ -84,7 +84,10 @@ fn test_trust_model_default_deny() {
     );
 
     // Create a model with wrong number of weights to trigger mismatch
-    let wrong_weights = crate::trust_linear::TrustWeights { weights: vec![0.1, 0.2, 0.3], ..Default::default() }; // Only 3 weights instead of 5
+    let wrong_weights = crate::trust_linear::TrustWeights {
+        weights: vec![0.1, 0.2, 0.3],
+        ..Default::default()
+    }; // Only 3 weights instead of 5
     let wrong_model = TrustLinearModel::new(wrong_weights);
 
     let (score, allowed) = wrong_model.evaluate(&features);
@@ -118,7 +121,7 @@ fn test_quorum_system() -> SigilResult<()> {
     // Create test infrastructure
     let temp_dir = TempDir::new().unwrap();
     let store_path = temp_dir.path().join("test_canon.db");
-    let encryption_key = KeyManager::get_encryption_key().unwrap();
+    let encryption_key = KeyManager::dev_key_for_testing().unwrap();
     let canon_store = Arc::new(Mutex::new(
         EncryptedCanonStoreSled::new(store_path.to_str().unwrap(), &encryption_key).unwrap(),
     ));

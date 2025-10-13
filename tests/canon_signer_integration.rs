@@ -85,5 +85,5 @@ fn test_canon_signer_invalid_args() {
 
     // Should show error message
     let error_text = String::from_utf8_lossy(&output.stderr);
-    assert!(error_text.len() > 0, "Should have error output");
+    assert!(!error_text.is_empty(), "Should have error output");
 }

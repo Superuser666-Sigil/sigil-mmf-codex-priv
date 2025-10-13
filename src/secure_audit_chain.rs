@@ -370,9 +370,12 @@ mod tests {
             metadata: HashMap::new(),
         };
 
-        let child_chain =
-            SecureAuditChain::create_chain(child_data, std::slice::from_ref(&parent_chain), &signing_key)
-                .unwrap();
+        let child_chain = SecureAuditChain::create_chain(
+            child_data,
+            std::slice::from_ref(&parent_chain),
+            &signing_key,
+        )
+        .unwrap();
 
         // Verify lineage
         assert_eq!(child_chain.parent_hashes.len(), 1);
