@@ -3,6 +3,8 @@
 //! Enhanced with secure network client implementation as specified in Phase 2.7 of the security audit plan.
 
 use serde::{Deserialize, Serialize};
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 use crate::errors::SigilError;
 
@@ -20,6 +22,7 @@ pub struct IRLResponse {
 }
 
 /// Secure network client with timeout and TLS enforcement
+#[derive(Clone)]
 pub struct SecureNetworkClient {
     client: reqwest::Client,
     base_url: String,
@@ -108,14 +111,41 @@ pub fn query_phi4_executor(context: &str, input: &str) -> Result<IRLResponse, Bo
     // Create a default secure client for legacy usage
     let client = SecureNetworkClient::new("http://localhost:11434".to_string(), 30)
         .map_err(|e| format!("Failed to create network client: {e}"))?;
-    
-    // Use blocking runtime for legacy compatibility
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {e}"))?;
-    
-    let response = runtime.block_on(async {
-        client.query_phi4_executor(context, input, None).await
-    })?;
-    
+
+    // If we're already inside a Tokio runtime, offload the async work to a helper thread.
+    // Creating a new runtime on the same thread would panic, mirroring Python's
+    // ``RuntimeError: Cannot run the event loop while another loop is running``.
+    let response = if tokio::runtime::Handle::try_current().is_ok() {
+        let (tx, rx) = mpsc::channel();
+        let client_clone = client.clone();
+        let context_owned = context.to_string();
+        let input_owned = input.to_string();
+
+        thread::spawn(move || {
+            let result: Result<IRLResponse, SigilError> = (|| {
+                let runtime = tokio::runtime::Runtime::new().map_err(|e| {
+                    SigilError::internal(format!("Failed to create runtime: {e}"))
+                })?;
+
+                runtime.block_on(async {
+                    client_clone
+                        .query_phi4_executor(&context_owned, &input_owned, None)
+                        .await
+                })
+            })();
+
+            let _ = tx.send(result);
+        });
+
+        rx.recv()
+            .map_err(|e| format!("Failed to receive IRL response: {e}"))??
+    } else {
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| format!("Failed to create runtime: {e}"))?;
+
+        runtime
+            .block_on(async { client.query_phi4_executor(context, input, None).await })?
+    };
+
     Ok(response)
 }
