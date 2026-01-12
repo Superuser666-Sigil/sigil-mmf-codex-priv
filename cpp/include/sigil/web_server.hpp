@@ -18,10 +18,10 @@ namespace sigil
         std::uint16_t port{8080};
         std::size_t threads{std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4};
         RateLimiter::Config rate_limit{};
-        std::shared_ptr<CanonStore> canon_store; // optional, enables registry-backed witness verification
+        std::shared_ptr<CanonStore> canon_store;           // optional, enables registry-backed witness verification
         std::shared_ptr<WitnessRegistry> witness_registry; // optional, used if provided
-        std::size_t quorum_threshold{1}; // default single-witness quorum
-        MMFConfig runtime_cfg{}; // loaded config snapshot for routes
+        std::size_t quorum_threshold{1};                   // default single-witness quorum
+        MMFConfig runtime_cfg{};                           // loaded config snapshot for routes
     };
 
     /**

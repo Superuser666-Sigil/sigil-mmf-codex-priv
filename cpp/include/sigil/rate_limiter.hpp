@@ -17,8 +17,8 @@ namespace sigil
     public:
         struct Config
         {
-            double tokens_per_second{1.0};   // 60 per minute
-            double burst_capacity{60.0};     // allow short bursts
+            double tokens_per_second{1.0}; // 60 per minute
+            double burst_capacity{60.0};   // allow short bursts
         };
 
         RateLimiter();

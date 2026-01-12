@@ -97,11 +97,11 @@ namespace sigil
     class WebServer::Impl
     {
     public:
-                explicit Impl(WebServerConfig cfg)
-                    : cfg_(std::move(cfg)),
-                            ioc_(static_cast<int>(cfg.threads)),
-                            acceptor_(ioc_),
-                            limiter_(cfg.rate_limit)
+        explicit Impl(WebServerConfig cfg)
+            : cfg_(std::move(cfg)),
+              ioc_(static_cast<int>(cfg.threads)),
+              acceptor_(ioc_),
+              limiter_(cfg.rate_limit)
         {
         }
 
@@ -137,7 +137,8 @@ namespace sigil
             threads.reserve(cfg_.threads);
             for (std::size_t i = 0; i < cfg_.threads; ++i)
             {
-                threads.emplace_back([this] { ioc_.run(); });
+                threads.emplace_back([this]
+                                     { ioc_.run(); });
             }
 
             for (auto &t : threads)
@@ -172,11 +173,11 @@ namespace sigil
         class Session : public std::enable_shared_from_this<Session>
         {
         public:
-                        Session(tcp::socket socket, RateLimiter &limiter, WebServerConfig &cfg)
+            Session(tcp::socket socket, RateLimiter &limiter, WebServerConfig &cfg)
                 : stream_(std::move(socket)),
                   buffer_(),
-                limiter_(limiter),
-                cfg_(cfg)
+                  limiter_(limiter),
+                  cfg_(cfg)
             {
             }
 
@@ -222,7 +223,8 @@ namespace sigil
             {
                 auto self = shared_from_this();
                 http::async_write(stream_, res_,
-                                  [self](beast::error_code ec, std::size_t) {
+                                  [self](beast::error_code ec, std::size_t)
+                                  {
                                       self->on_write(ec);
                                   });
             }

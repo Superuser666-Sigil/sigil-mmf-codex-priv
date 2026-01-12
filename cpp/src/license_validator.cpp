@@ -41,7 +41,8 @@ namespace sigil
             doc.public_key_b64 = tbl["public_key"].value_or(std::string());
             doc.signature_b64 = tbl["signature"].value_or(std::string());
 
-            auto to_json = [&](const toml::node &node, const auto &self) -> nlohmann::json {
+            auto to_json = [&](const toml::node &node, const auto &self) -> nlohmann::json
+            {
                 if (auto v = node.as_string())
                     return v->get();
                 if (auto v = node.as_integer())

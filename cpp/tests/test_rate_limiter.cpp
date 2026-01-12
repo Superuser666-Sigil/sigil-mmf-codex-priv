@@ -7,8 +7,8 @@ using namespace sigil;
 TEST_CASE("RateLimiter allows bursts then throttles", "[rate_limiter]")
 {
     RateLimiter::Config cfg{
-        10.0,  // tokens per second
-        5.0    // burst
+        10.0, // tokens per second
+        5.0   // burst
     };
     RateLimiter rl(cfg);
 

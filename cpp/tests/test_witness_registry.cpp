@@ -6,22 +6,30 @@
 
 using namespace sigil;
 
-namespace {
-    class InMemoryCanonStore : public CanonStore {
+namespace
+{
+    class InMemoryCanonStore : public CanonStore
+    {
     public:
-        Result<void> add_record(const CanonicalRecord &record, const LOA &user_loa, bool /*sign_on_write*/) override {
-            if (!can_write_canon(user_loa)) {
+        Result<void> add_record(const CanonicalRecord &record, const LOA &user_loa, bool /*sign_on_write*/) override
+        {
+            if (!can_write_canon(user_loa))
+            {
                 return std::unexpected(SigilError::loa_denied("insufficient LOA to write"));
             }
             records_.push_back(record);
             return {};
         }
 
-        std::vector<CanonicalRecord> list_records(const std::optional<std::string> &kind, const LOA & /*user_loa*/) override {
-            if (!kind) return records_;
+        std::vector<CanonicalRecord> list_records(const std::optional<std::string> &kind, const LOA & /*user_loa*/) override
+        {
+            if (!kind)
+                return records_;
             std::vector<CanonicalRecord> out;
-            for (const auto &r : records_) {
-                if (r.kind == *kind) out.push_back(r);
+            for (const auto &r : records_)
+            {
+                if (r.kind == *kind)
+                    out.push_back(r);
             }
             return out;
         }
@@ -30,7 +38,8 @@ namespace {
         std::vector<CanonicalRecord> records_;
     };
 
-    std::string sign_message(const crypto::Ed25519KeyPair &kp, const std::string &canonical_json) {
+    std::string sign_message(const crypto::Ed25519KeyPair &kp, const std::string &canonical_json)
+    {
         crypto::Bytes msg(canonical_json.begin(), canonical_json.end());
         auto sig_arr = kp.sign(msg);
         crypto::Bytes sig_bytes(sig_arr.begin(), sig_arr.end());
@@ -38,7 +47,8 @@ namespace {
     }
 }
 
-TEST_CASE("Witness signatures require registry verification", "[witness][registry]") {
+TEST_CASE("Witness signatures require registry verification", "[witness][registry]")
+{
     auto store = std::make_shared<InMemoryCanonStore>();
     WitnessRegistry registry(store);
 
@@ -64,7 +74,8 @@ TEST_CASE("Witness signatures require registry verification", "[witness][registr
     REQUIRE(verified.has_value());
     REQUIRE(*verified);
 
-    SECTION("Rejects tampered signature") {
+    SECTION("Rejects tampered signature")
+    {
         std::string bad_sig = sig_b64;
         bad_sig[0] = (bad_sig[0] == 'A') ? 'B' : 'A';
         CanonicalRecord tampered = record;
@@ -75,7 +86,8 @@ TEST_CASE("Witness signatures require registry verification", "[witness][registr
         REQUIRE_FALSE(*res);
     }
 
-    SECTION("Rejects unknown witness") {
+    SECTION("Rejects unknown witness")
+    {
         CanonicalRecord unknown = record;
         unknown.witnesses.clear();
         unknown.add_witness_signature("w2", sig_b64, "attestor");
