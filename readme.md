@@ -289,7 +289,23 @@ allow_admin_export = false
 
 ---
 
-## 📄 **License**
+## � **C++ Translation**
+
+A modern C++23 translation of the Sigil runtime is in active development at [`cpp/`](cpp/). This provides native performance and cross-platform deployment options while maintaining full cryptographic compatibility with the Rust implementation.
+
+**Status**: Phase 1 Complete (Foundation)
+- ✅ Core cryptography (Ed25519, AES-GCM, SHA-256, Argon2)
+- ✅ RFC 8785 JSON canonicalization
+- ✅ Canonical record signing/verification
+- ✅ LOA type system and error handling
+- 🚧 Configuration system (in progress)
+- 📋 Storage, audit, licenses, HTTP API (planned)
+
+See [`cpp/README.md`](cpp/README.md) for build instructions and implementation details.
+
+---
+
+## �📄 **License**
 
 This codebase is governed by the **MMF License Framework**:
 

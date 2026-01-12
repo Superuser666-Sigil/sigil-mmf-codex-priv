@@ -1,0 +1,51 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+
+# Compiled files
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test outputs
+Testing/
+*.log
+test_logs/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Makefile
+
+# Catch2 downloaded
+_deps/
+
+# Coverage
+*.gcda
+*.gcno
+*.gcov
+coverage/
+
+# Sanitizer outputs
+*.asan
+*.ubsan
+*.msan
+
+# Package managers
+vcpkg_installed/
+conan/
